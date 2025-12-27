@@ -1,0 +1,10 @@
+{
+	"id": "opvault",
+	"name": "opvault",
+	"version": "0.0.1",
+	"minAppVersion": "0.15.0",
+	"description": "Live share your notes peer-to-peer via WebTransport.",
+	"author": "Infinity6542",
+	"authorUrl": "https://github.com/infinity6542",
+	"isDesktopOnly": false
+}

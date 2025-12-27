@@ -1,12 +1,13 @@
-import { Notice } from 'obsidian';
+import { Notice, TFile, App } from 'obsidian';
 
 interface Message {
-  type: "join" | "message";
+  type: "join" | "message" | "file";
   channel_id: string;
   payload: string;
+  filename?: string;
 }
 
-export async function connectToServer(serverHash: string, channelID: string) {
+export async function connectToServer(serverHash: string, channelID: string, app: App) {
   const url = "https://127.0.0.1:8080/ws";
 
   const options: any = {
@@ -34,7 +35,7 @@ export async function connectToServer(serverHash: string, channelID: string) {
     await sendJSON(writer, joinMsg);
     new Notice(`Joined the channel ${channelID}.`);
 
-    readLoop(reader);
+    readLoop(reader, app);
     return writer;
   } catch (e) {
     console.error("Something went wrong", e);
@@ -49,7 +50,7 @@ export async function sendJSON(writer: any, msg: Message) {
   await writer.write(data);
 }
 
-async function readLoop(reader: any) {
+async function readLoop(reader: any, app: App) {
   const decoder = new TextDecoder();
   try {
     while (true) {
@@ -65,6 +66,9 @@ async function readLoop(reader: any) {
         const msg = JSON.parse(message);
         if (msg.type === "message") {
           new Notice(`New message in channel ${msg.channel_id}: ${msg.content}`);
+        } else if (msg.type === "file" && msg.filename) {
+          new Notice(`Received file ${msg.filename} in channel ${msg.channel_id}`);
+          await receiveFile(app, msg.filename, msg.payload);
         }
       } catch (e) {
         console.error("Error parsing message JSON", e);
@@ -85,3 +89,19 @@ function conversion(base64: string): Uint8Array {
   return bytes;
 }
 
+async function receiveFile(app: App, filename: string, content: string) {
+  try {
+    let finalName = filename;
+    const existing = app.vault.getAbstractFileByPath(finalName);
+    if (existing) {
+      finalName = "Copy_" + filename;
+      new Notice(`File exists. Saving as ${finalName}`);
+    }
+
+    await app.vault.create(finalName, content);
+    new Notice(`Saved file: ${finalName}.`);
+  } catch (e) {
+    console.error("Error while saving file", e);
+    new Notice("Error saving file.");
+  }
+}

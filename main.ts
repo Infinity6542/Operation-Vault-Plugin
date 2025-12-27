@@ -1,5 +1,6 @@
 import { Plugin, Notice, TFile } from 'obsidian';
-import { connectToServer, sendJSON } from './transport';
+import { connectToServer, sendSecureMessage } from './transport';
+import { sendFileChunked } from './fileHandler';
 
 const hash = "sCeCUgLb41xsgWA0+YHPbuwchl2mowfXS+ntOnSfIXE=";
 const channel = "vault-1"
@@ -15,21 +16,20 @@ export default class OpVaultPlugin extends Plugin {
       this.activeWriter = await connectToServer(hash, channel, this.app);
     })
 
-    this.addRibbonIcon('paper-plane', 'Broadcast', async () => {
+    this.addRibbonIcon('text', 'Chat', async () => {
       if (!this.activeWriter) {
         new Notice('Not connected to server.');
         console.log('No active writer found.');
         return;
       }
       new Notice('Broadcasting message...');
-      await sendJSON(this.activeWriter, {
-        type: "message",
-        channel_id: channel,
-        payload: "Helloooooo!"
+      await sendSecureMessage(this.activeWriter, channel, {
+        type: "chat",
+        content: "Helloooooo!"
       });
   })
 
-  this.addRibbonIcon("checkmark", "Send file", async () => {
+  this.addRibbonIcon("paper-plane", "Send file", async () => {
     if (!this.activeWriter) {
       new Notice('Not connected to server.');
       console.log('No active writer found.');
@@ -44,15 +44,8 @@ export default class OpVaultPlugin extends Plugin {
     }
 
     const content = await this.app.vault.read(activeFile);
-    
-    new Notice(`Sending file: ${activeFile.name}`);
 
-    await sendJSON(this.activeWriter, {
-      type: "file",
-      channel_id: channel,
-      payload: content,
-      filename: activeFile.name
-    });
+    await sendFileChunked(this.activeWriter, channel, activeFile, this.app);
   })
 }
 

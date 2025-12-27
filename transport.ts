@@ -1,15 +1,24 @@
-import { Notice, TFile, App } from 'obsidian';
+import { Notice, App, TFile } from 'obsidian';
+import { encryptPacket, decryptPacket, getHash, arrayBufferToBase64 } from './crypto'
 
-interface Message {
-  type: "join" | "message" | "file";
-  channel_id: string;
-  payload: string;
+interface innerMessage {
+  type: "chat" | "file_start" | "file_chunk" | "file_end";
+  content: string;
   filename?: string;
+  fileId?: string;
+  chunkIndex?: number;
 }
+
+interface TransportPacket {
+  type: "join" | "message";
+  channel_id: string;
+  payload: string; // Encrypted
+}
+
+const incomingFiles = new Map<string, Uint8Array[]>()
 
 export async function connectToServer(serverHash: string, channelID: string, app: App) {
   const url = "https://127.0.0.1:8080/ws";
-
   const options: any = {
     serverCertificateHashes: [
       { algorithm: "sha-256", value: conversion(serverHash) }
@@ -27,12 +36,12 @@ export async function connectToServer(serverHash: string, channelID: string, app
     const writer = stream.writable.getWriter();
     const reader = stream.readable.getReader();
 
-    const joinMsg: Message = {
+    const joinPacket: TransportPacket = {
       type: "join",
       channel_id: channelID,
       payload: "Hi!"
     };
-    await sendJSON(writer, joinMsg);
+    await sendRawJSON(writer, joinPacket);
     new Notice(`Joined the channel ${channelID}.`);
 
     readLoop(reader, app);
@@ -43,15 +52,35 @@ export async function connectToServer(serverHash: string, channelID: string, app
     return null
   }
 }
-export async function sendJSON(writer: any, msg: Message) {
-  const jsonString = JSON.stringify(msg);
-  const encoder = new TextEncoder();
-  const data = encoder.encode(jsonString);
-  await writer.write(data);
+
+export async function sendSecureMessage(writer: any, channelId: string, innerData: innerMessage) {
+  const encryptedPayload = await encryptPacket(innerData);
+
+  const packet: TransportPacket = {
+    type: "message",
+    channel_id: channelId,
+    payload: encryptedPayload
+  };
+  
+  await sendRawJSON(writer, packet);
 }
+
+async function sendRawJSON(writer: any, data: any) {
+  const encoder = new TextEncoder();
+  await writer.write(encoder.encode(JSON.stringify(data) + "\n"));
+}
+
+// Legacy
+// export async function sendJSON(writer: any, msg: Message) {
+//   const jsonString = JSON.stringify(msg);
+//   const encoder = new TextEncoder();
+//  const data = encoder.encode(jsonString);
+//  await writer.write(data);
+//}
 
 async function readLoop(reader: any, app: App) {
   const decoder = new TextDecoder();
+  let buffer = "";
   try {
     while (true) {
       const { value, done } = await reader.read();
@@ -59,23 +88,78 @@ async function readLoop(reader: any, app: App) {
         console.log("Stream closed");
         break;
       }
-      const message = decoder.decode(value, { stream: true });
-      console.log("Received message:", message);
+      buffer += decoder.decode(value, { stream: true });
 
-      try {
-        const msg = JSON.parse(message);
-        if (msg.type === "message") {
-          new Notice(`New message in channel ${msg.channel_id}: ${msg.content}`);
-        } else if (msg.type === "file" && msg.filename) {
-          new Notice(`Received file ${msg.filename} in channel ${msg.channel_id}`);
-          await receiveFile(app, msg.filename, msg.payload);
+      let boundary = buffer.indexOf("\n");
+      while (boundary !== -1) {
+        const chunk = buffer.slice(0, boundary).trim();
+        buffer = buffer.slice(boundary + 1);
+
+        if (chunk.length > 0) {
+          try {
+            const message = JSON.parse(chunk);
+            await handleIn(message, app);
+          } catch (e) {
+            console.error("Error parsing buffered chunk JSON", e);
+          }
         }
-      } catch (e) {
-        console.error("Error parsing message JSON", e);
+        boundary = buffer.indexOf("\n");
       }
     }
   } catch (e) {
       console.error("Error reading from stream. It's probably closed, but just in case it isn't: ", e);
+  }
+}
+
+async function handleIn(message: any, app: App) {
+  if (message.type === "message" && message.payload) {
+    const decrypted = await decryptPacket(message.payload);
+
+    if (decrypted) {
+      if (decrypted.type === "chat") {
+        new Notice(`From peer: ${decrypted.content}`);
+        console.log("Chat message:", decrypted.content);
+      } else if (decrypted.type === "file_start") {
+        if (decrypted.fileId) {
+          incomingFiles.set(decrypted.fileId, []);
+          console.log(`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`);
+        } else {
+          console.log("file_start message missing fileId");
+          return;
+        }
+      } else if (decrypted.type === "file_chunk") {
+        if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
+          const chunkBytes = conversion(decrypted.content);
+          incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
+          console.log(`Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`);
+        } else {
+          console.log("file_chunk message with unknown fileId");
+          return;
+        }
+      } else if (decrypted.type === "file_end") {
+        if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
+          const chunks = incomingFiles.get(decrypted.fileId)!;
+
+          if (chunks) {
+            const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+            const file = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const chunk of chunks) {
+              file.set(chunk, offset);
+              offset += chunk.length;
+            }
+
+            const base64String = arrayBufferToBase64(file.buffer);
+
+            await receiveFile(app, decrypted.filename || "unnamed", base64String);
+            incomingFiles.delete(decrypted.fileId);
+            console.log(`Received file: ${decrypted.fileId}`);
+          }
+        } else {
+          console.log("Unknown inner message type:", decrypted);
+        }
+      }
+    }
   }
 }
 
@@ -92,14 +176,92 @@ function conversion(base64: string): Uint8Array {
 async function receiveFile(app: App, filename: string, content: string) {
   try {
     let finalName = filename;
+    const incomingBytes = conversion(content);
+    const incomingBuffer = incomingBytes.buffer;
+
     const existing = app.vault.getAbstractFileByPath(finalName);
+
     if (existing) {
-      finalName = "Copy_" + filename;
+      if (existing instanceof TFile && incomingBuffer instanceof ArrayBuffer) {
+        const existingBuffer = await app.vault.readBinary(existing);
+
+        const existingHash = await getHash(existingBuffer);
+        const incomingHash = await getHash(incomingBuffer);
+        if (existingHash === incomingHash) {
+           while (app.vault.getAbstractFileByPath(finalName)) {
+            let name = finalName.split('');
+            let filename = name.join('');
+            let extension = "";
+
+            const lastDot = finalName.lastIndexOf('.');
+            if (lastDot !== -1) {
+              filename = name.slice(0, lastDot).join('');
+              extension = name.slice(lastDot).join('');
+            }
+            finalName = `${filename}_copy${extension}`;
+          }
+        } else {
+          while (app.vault.getAbstractFileByPath(finalName)) {
+            let name = finalName.split('');
+            let filename = name.join('');
+            let extension = "";
+
+            const lastDot = finalName.lastIndexOf('.');
+            if (lastDot !== -1) {
+              filename = name.slice(0, lastDot).join('');
+              extension = name.slice(lastDot).join('');
+            }
+
+            let count = 1;
+
+            if (filename.endsWith(')')) {
+              const openParenIndex = filename.lastIndexOf(' (');
+              if (openParenIndex !== -1) {
+                const numberString = filename.substring(openParenIndex + 2, filename.length - 1);
+                const parsed = parseInt(numberString);
+                if (!isNaN(parsed)) {
+                  count = parsed + 1;
+                  filename = filename.substring(0, openParenIndex);
+                }
+              }
+            }
+            finalName = `${filename} (${count})${extension}`;
+          }
+        }
+      } else {
+        while (app.vault.getAbstractFileByPath(finalName)) {
+            let name = finalName.split('');
+            let filename = name.join('');
+            let extension = "";
+
+            const lastDot = finalName.lastIndexOf('.');
+            if (lastDot !== -1) {
+              filename = name.slice(0, lastDot).join('');
+              extension = name.slice(lastDot).join('');
+            }
+
+            let count = 1;
+
+            if (filename.endsWith(')')) {
+              const openParenIndex = filename.lastIndexOf(' (');
+              if (openParenIndex !== -1) {
+                const numberString = filename.substring(openParenIndex + 2, filename.length - 1);
+                const parsed = parseInt(numberString);
+                if (!isNaN(parsed)) {
+                  count = parsed + 1;
+                  filename = filename.substring(0, openParenIndex);
+                }
+              }
+            }
+            finalName = `${filename} (${count})${extension}`;
+          }      }
       new Notice(`File exists. Saving as ${finalName}`);
     }
 
-    await app.vault.create(finalName, content);
+    console.log(`Saving as ${finalName}`);
+    await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);
     new Notice(`Saved file: ${finalName}.`);
+    return;
   } catch (e) {
     console.error("Error while saving file", e);
     new Notice("Error saving file.");

@@ -1,6 +1,18 @@
-import { Plugin, Notice, TFile } from 'obsidian';
+import { Plugin, Notice } from 'obsidian';
 import { connectToServer, sendSecureMessage } from './transport';
 import { sendFileChunked } from './fileHandler';
+
+interface settings {
+  serverUrl: string;
+  channelName: string;
+  encryptionKey: string;
+}
+
+const defaultSettings: settings = {
+  serverUrl: "ws://127.0.0.1:8080",
+  channelName: "vault-1",
+  encryptionKey: "wow-really-cool-secret-444",
+}
 
 const hash = "sCeCUgLb41xsgWA0+YHPbuwchl2mowfXS+ntOnSfIXE=";
 const channel = "vault-1"
@@ -43,8 +55,6 @@ export default class OpVaultPlugin extends Plugin {
       return;
     }
 
-    const content = await this.app.vault.read(activeFile);
-
     await sendFileChunked(this.activeWriter, channel, activeFile, this.app);
   })
 }
@@ -52,4 +62,7 @@ export default class OpVaultPlugin extends Plugin {
   onunload() {
     console.log("Unloading...");
   }
+}
+
+class vaultSettingsTab {
 }

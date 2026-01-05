@@ -217,11 +217,11 @@ async function receiveFile(app: App, filename: string, content: string) {
 						let filename = name.join("");
 						let extension = "";
 
+						// This assumes that the filename has an extension
+						//TODO: effectively handle files without extensions
 						const lastDot = finalName.lastIndexOf(".");
-						if (lastDot !== -1) {
-							filename = name.slice(0, lastDot).join("");
-							extension = name.slice(lastDot).join("");
-						}
+						filename = name.slice(0, lastDot).join("");
+						extension = name.slice(lastDot).join("");
 						finalName = `${filename}_copy${extension}`;
 					}
 				} else {
@@ -230,11 +230,11 @@ async function receiveFile(app: App, filename: string, content: string) {
 						let filename = name.join("");
 						let extension = "";
 
+						// This assumes that the filename has an extension
+						//TODO: effectively handle files without extensions
 						const lastDot = finalName.lastIndexOf(".");
-						if (lastDot !== -1) {
-							filename = name.slice(0, lastDot).join("");
-							extension = name.slice(lastDot).join("");
-						}
+						filename = name.slice(0, lastDot).join("");
+						extension = name.slice(lastDot).join("");
 
 						let count = 1;
 
@@ -261,11 +261,11 @@ async function receiveFile(app: App, filename: string, content: string) {
 					let filename = name.join("");
 					let extension = "";
 
+					// This assumes that the filename has an extension
+					//TODO: effectively handle files without extensions
 					const lastDot = finalName.lastIndexOf(".");
-					if (lastDot !== -1) {
-						filename = name.slice(0, lastDot).join("");
-						extension = name.slice(lastDot).join("");
-					}
+					filename = name.slice(0, lastDot).join("");
+					extension = name.slice(lastDot).join("");
 
 					let count = 1;
 

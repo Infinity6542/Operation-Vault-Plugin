@@ -95,3 +95,7 @@ export async function sendFileChunked(
 		new Notice(`Error while sending file: ${e.message}`);
 	}
 }
+
+// export async function nameFile(name: string): string {
+
+// }

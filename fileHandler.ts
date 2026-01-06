@@ -96,6 +96,36 @@ export async function sendFileChunked(
 	}
 }
 
-// export async function nameFile(name: string): string {
+// This assumes that the filename has an extension
+//TODO: effectively handle files without extensions
+export function nameFile(oName: string, duplicate?: boolean): string {
+	const name = oName.split("");
+	const lastDot = oName.lastIndexOf(".");
+	const extension = name.slice(lastDot).join("");
+	let filename = name.slice(0, lastDot).join("");
+	let finalName: string;
 
-// }
+	if (duplicate === false || !duplicate) {
+		let count = 1;
+
+		if (filename.endsWith(")")) {
+			const openParenIndex = filename.lastIndexOf(" (");
+			if (openParenIndex !== -1) {
+				const numberString = filename.substring(
+					openParenIndex + 2,
+					filename.length - 1
+				);
+				const parsed = parseInt(numberString);
+				if (!isNaN(parsed)) {
+					count = parsed + 1;
+					filename = filename.substring(0, openParenIndex);
+				}
+			}
+		}
+		finalName = `${filename} (${count})${extension}`;
+	} else {
+		finalName = `${filename}_copy${extension}`;
+	}
+
+	return finalName;
+}

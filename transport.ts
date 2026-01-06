@@ -5,6 +5,7 @@ import {
 	getHash,
 	arrayBufferToBase64,
 } from "./crypto";
+import { nameFile } from "./fileHandler";
 
 interface innerMessage {
 	type: "chat" | "file_start" | "file_chunk" | "file_end";
@@ -128,62 +129,67 @@ async function readLoop(reader: any, app: App) {
 }
 
 async function handleIn(message: any, app: App) {
-	if (message.type === "message" && message.payload) {
-		const decrypted = await decryptPacket(message.payload);
+	if (message.type !== "message" && !message.payload) {
+		console.error("Invalid message", message);
+		return;
+	}
+	const decrypted = await decryptPacket(message.payload);
 
-		if (decrypted) {
-			if (decrypted.type === "chat") {
-				new Notice(`From peer: ${decrypted.content}`);
-				console.log("Chat message:", decrypted.content);
-			} else if (decrypted.type === "file_start") {
-				if (decrypted.fileId) {
-					incomingFiles.set(decrypted.fileId, []);
-					console.log(
-						`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
-					);
-				} else {
-					console.log("file_start message missing fileId");
-					return;
-				}
-			} else if (decrypted.type === "file_chunk") {
-				if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
-					const chunkBytes = conversion(decrypted.content);
-					incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
-					console.log(
-						`Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
-					);
-				} else {
-					console.log("file_chunk message with unknown fileId");
-					return;
-				}
-			} else if (decrypted.type === "file_end") {
-				if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
-					const chunks = incomingFiles.get(decrypted.fileId)!;
+	if (!decrypted) {
+		console.error("Empty decrypted content", decrypted);
+	}
 
-					if (chunks) {
-						const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-						const file = new Uint8Array(totalLength);
-						let offset = 0;
-						for (const chunk of chunks) {
-							file.set(chunk, offset);
-							offset += chunk.length;
-						}
-
-						const base64String = arrayBufferToBase64(file.buffer);
-
-						await receiveFile(
-							app,
-							decrypted.filename || "unnamed",
-							base64String
-						);
-						incomingFiles.delete(decrypted.fileId);
-						console.log(`Received file: ${decrypted.fileId}`);
-					}
-				} else {
-					console.log("Unknown inner message type:", decrypted);
-				}
+	switch (decrypted.type) {
+		case "chat":
+			new Notice(`From peer: ${decrypted.content}`);
+			console.log("Chat message:", decrypted.content);
+		case "file_start":
+			if (decrypted.fileId) {
+				incomingFiles.set(decrypted.fileId, []);
+				console.log(
+					`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
+				);
+			} else {
+				console.log("file_start message missing fileId");
+				return;
 			}
-		}
+		case "file_chunk":
+			if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
+				const chunkBytes = conversion(decrypted.content);
+				incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
+				console.log(
+					`Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
+				);
+			} else {
+				console.log("file_chunk message with unknown fileId");
+				return;
+			}
+		case "file_end":
+			if (!decrypted.filename && !incomingFiles.has(decrypted.fileId!)) {
+				console.log("Unknown inner message type:", decrypted);
+				break;
+			}
+			const chunks = incomingFiles.get(decrypted.fileId)!;
+
+			if (!chunks) {
+				break;
+			}
+
+			const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+			const file = new Uint8Array(totalLength);
+			let offset = 0;
+			for (const chunk of chunks) {
+				file.set(chunk, offset);
+				offset += chunk.length;
+			}
+
+			const base64String = arrayBufferToBase64(file.buffer);
+
+			await receiveFile(app, decrypted.filename || "unnamed", base64String);
+			incomingFiles.delete(decrypted.fileId);
+			console.log(`Received file: ${decrypted.fileId}`);
+		default:
+			console.error("Unknown message type:", decrypted.type);
 	}
 }
 
@@ -213,77 +219,16 @@ async function receiveFile(app: App, filename: string, content: string) {
 				const incomingHash = await getHash(incomingBuffer);
 				if (existingHash === incomingHash) {
 					while (app.vault.getAbstractFileByPath(finalName)) {
-						let name = finalName.split("");
-						let filename = name.join("");
-						let extension = "";
-
-						// This assumes that the filename has an extension
-						//TODO: effectively handle files without extensions
-						const lastDot = finalName.lastIndexOf(".");
-						filename = name.slice(0, lastDot).join("");
-						extension = name.slice(lastDot).join("");
-						finalName = `${filename}_copy${extension}`;
+						finalName = nameFile(finalName, true);
 					}
 				} else {
 					while (app.vault.getAbstractFileByPath(finalName)) {
-						let name = finalName.split("");
-						let filename = name.join("");
-						let extension = "";
-
-						// This assumes that the filename has an extension
-						//TODO: effectively handle files without extensions
-						const lastDot = finalName.lastIndexOf(".");
-						filename = name.slice(0, lastDot).join("");
-						extension = name.slice(lastDot).join("");
-
-						let count = 1;
-
-						if (filename.endsWith(")")) {
-							const openParenIndex = filename.lastIndexOf(" (");
-							if (openParenIndex !== -1) {
-								const numberString = filename.substring(
-									openParenIndex + 2,
-									filename.length - 1
-								);
-								const parsed = parseInt(numberString);
-								if (!isNaN(parsed)) {
-									count = parsed + 1;
-									filename = filename.substring(0, openParenIndex);
-								}
-							}
-						}
-						finalName = `${filename} (${count})${extension}`;
+						finalName = nameFile(finalName, false);
 					}
 				}
 			} else {
 				while (app.vault.getAbstractFileByPath(finalName)) {
-					let name = finalName.split("");
-					let filename = name.join("");
-					let extension = "";
-
-					// This assumes that the filename has an extension
-					//TODO: effectively handle files without extensions
-					const lastDot = finalName.lastIndexOf(".");
-					filename = name.slice(0, lastDot).join("");
-					extension = name.slice(lastDot).join("");
-
-					let count = 1;
-
-					if (filename.endsWith(")")) {
-						const openParenIndex = filename.lastIndexOf(" (");
-						if (openParenIndex !== -1) {
-							const numberString = filename.substring(
-								openParenIndex + 2,
-								filename.length - 1
-							);
-							const parsed = parseInt(numberString);
-							if (!isNaN(parsed)) {
-								count = parsed + 1;
-								filename = filename.substring(0, openParenIndex);
-							}
-						}
-					}
-					finalName = `${filename} (${count})${extension}`;
+					finalName = nameFile(finalName, false);
 				}
 			}
 			new Notice(`File exists. Saving as ${finalName}`);

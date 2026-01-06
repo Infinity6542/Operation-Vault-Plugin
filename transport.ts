@@ -129,7 +129,7 @@ async function readLoop(reader: any, app: App) {
 }
 
 async function handleIn(message: any, app: App) {
-	if (message.type !== "message" && !message.payload) {
+	if (message.type !== "message" || !message.payload) {
 		console.error("Invalid message", message);
 		return;
 	}
@@ -137,12 +137,14 @@ async function handleIn(message: any, app: App) {
 
 	if (!decrypted) {
 		console.error("Empty decrypted content", decrypted);
+		return;
 	}
 
 	switch (decrypted.type) {
 		case "chat":
 			new Notice(`From peer: ${decrypted.content}`);
 			console.log("Chat message:", decrypted.content);
+			break;
 		case "file_start":
 			if (decrypted.fileId) {
 				incomingFiles.set(decrypted.fileId, []);
@@ -153,6 +155,7 @@ async function handleIn(message: any, app: App) {
 				console.log("file_start message missing fileId");
 				return;
 			}
+			break;
 		case "file_chunk":
 			if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
 				const chunkBytes = conversion(decrypted.content);
@@ -164,8 +167,9 @@ async function handleIn(message: any, app: App) {
 				console.log("file_chunk message with unknown fileId");
 				return;
 			}
+			break;
 		case "file_end":
-			if (!decrypted.filename && !incomingFiles.has(decrypted.fileId!)) {
+			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId!)) {
 				console.log("Unknown inner message type:", decrypted);
 				break;
 			}
@@ -188,6 +192,7 @@ async function handleIn(message: any, app: App) {
 			await receiveFile(app, decrypted.filename || "unnamed", base64String);
 			incomingFiles.delete(decrypted.fileId);
 			console.log(`Received file: ${decrypted.fileId}`);
+			break;
 		default:
 			console.error("Unknown message type:", decrypted.type);
 	}

@@ -210,26 +210,20 @@ async function receiveFile(app: App, filename: string, content: string) {
 		const incomingBuffer = incomingBytes.buffer;
 
 		const existing = app.vault.getAbstractFileByPath(finalName);
+		let duplicate = false;
+
+		if (existing instanceof TFile && incomingBuffer instanceof ArrayBuffer) {
+			const existingBuffer = await app.vault.readBinary(existing);
+
+			const existingHash = await getHash(existingBuffer);
+			const incomingHash = await getHash(incomingBuffer);
+			
+			duplicate = existingHash === incomingHash;
+		}
 
 		if (existing) {
-			if (existing instanceof TFile && incomingBuffer instanceof ArrayBuffer) {
-				const existingBuffer = await app.vault.readBinary(existing);
-
-				const existingHash = await getHash(existingBuffer);
-				const incomingHash = await getHash(incomingBuffer);
-				if (existingHash === incomingHash) {
-					while (app.vault.getAbstractFileByPath(finalName)) {
-						finalName = nameFile(finalName, true);
-					}
-				} else {
-					while (app.vault.getAbstractFileByPath(finalName)) {
-						finalName = nameFile(finalName, false);
-					}
-				}
-			} else {
-				while (app.vault.getAbstractFileByPath(finalName)) {
-					finalName = nameFile(finalName, false);
-				}
+			while (app.vault.getAbstractFileByPath(finalName)) {
+				finalName = nameFile(finalName, duplicate);
 			}
 			new Notice(`File exists. Saving as ${finalName}`);
 		}

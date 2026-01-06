@@ -105,7 +105,9 @@ export function nameFile(oName: string, duplicate?: boolean): string {
 	let filename = name.slice(0, lastDot).join("");
 	let finalName: string;
 
-	if (duplicate === false || !duplicate) {
+	if (duplicate) {
+		finalName = `${filename}_copy${extension}`;
+	} else {
 		let count = 1;
 
 		if (filename.endsWith(")")) {
@@ -123,8 +125,6 @@ export function nameFile(oName: string, duplicate?: boolean): string {
 			}
 		}
 		finalName = `${filename} (${count})${extension}`;
-	} else {
-		finalName = `${filename}_copy${extension}`;
 	}
 
 	return finalName;

@@ -77,7 +77,7 @@ export default class OpVaultPlugin extends Plugin {
 	}
 
 	onunload() {
-		console.info("[OPV] Unloading...");
+		console.info("[OPV] We're done here... Bye bye :)");
 	}
 }
 

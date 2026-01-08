@@ -99,9 +99,7 @@ async function readLoop(reader: any, app: App) {
 	let buffer = "";
 	try {
 		while (true) {
-			console.info("[OPV] Awaiting data.");
 			const { value, done } = await reader.read();
-			console.info("[OPV] Received data.");
 			if (done) {
 				console.info("[OPV] Stream closed.");
 				break;

@@ -15,18 +15,18 @@ const defaultSettings: settings = {
 };
 
 export default class OpVaultPlugin extends Plugin {
-  settings: settings;
+	settings: settings;
 	activeWriter: any = null;
 
 	async onload() {
 		console.info("[OPV] Loading client...");
-    await this.loadSettings();
+		await this.loadSettings();
 
-    this.addSettingTab(new vaultSettingsTab(this.app, this));
+		this.addSettingTab(new vaultSettingsTab(this.app, this));
 
 		this.addRibbonIcon("dice", "Test connection", async () => {
-      const url = this.settings.serverUrl;
-      const channel = this.settings.channelName;
+			const url = this.settings.serverUrl;
+			const channel = this.settings.channelName;
 
 			new Notice("Trying connection...");
 			this.activeWriter = await connectToServer(url, channel, this.app);
@@ -59,17 +59,22 @@ export default class OpVaultPlugin extends Plugin {
 				return;
 			}
 
-			await sendFileChunked(this.activeWriter, this.settings.channelName, activeFile, this.app);
+			await sendFileChunked(
+				this.activeWriter,
+				this.settings.channelName,
+				activeFile,
+				this.app
+			);
 		});
 	}
 
-  async loadSettings() {
-    this.settings = Object.assign({}, defaultSettings, await this.loadData());
-  }
+	async loadSettings() {
+		this.settings = Object.assign({}, defaultSettings, await this.loadData());
+	}
 
-  async saveSettings() {
-    await this.saveData(this.settings);
-  }
+	async saveSettings() {
+		await this.saveData(this.settings);
+	}
 
 	onunload() {
 		console.info("[OPV] Unloading...");
@@ -77,50 +82,56 @@ export default class OpVaultPlugin extends Plugin {
 }
 
 class vaultSettingsTab extends PluginSettingTab {
-  plugin: OpVaultPlugin;
+	plugin: OpVaultPlugin;
 
-  constructor(app: App, plugin: OpVaultPlugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
+	constructor(app: App, plugin: OpVaultPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
 
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    
-    containerEl.createEl("h2", { text: "Settings"});
+	display(): void {
+		const { containerEl } = this;
+		containerEl.empty();
 
-    new Setting(containerEl)
-      .setName("Server URL")
-      .setDesc("The server address of the WebTransport server.")
-      .addText(text => text
-               .setPlaceholder("https://localhost:4433")
-               .setValue(this.plugin.settings.serverUrl)
-               .onChange(async (value) => {
-                 this.plugin.settings.serverUrl = value;
-                 await this.plugin.saveSettings();;
-               }));
+		containerEl.createEl("h2", { text: "Settings" });
 
-      new Setting(containerEl)
-        .setName("Channel Name")
-        .setDesc("The channel room ID to connect to.")
-        .addText(text => text
-                  .setPlaceholder("vault-1")
-                  .setValue(this.plugin.settings.channelName)
-                  .onChange(async (value) => {
-                    this.plugin.settings.channelName = value;
-                    await this.plugin.saveSettings();
-                  }));
+		new Setting(containerEl)
+			.setName("Server URL")
+			.setDesc("The server address of the WebTransport server.")
+			.addText((text) =>
+				text
+					.setPlaceholder("https://localhost:4433")
+					.setValue(this.plugin.settings.serverUrl)
+					.onChange(async (value) => {
+						this.plugin.settings.serverUrl = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
-      new Setting(containerEl)
-        .setName("Encryption Key")
-        .setDesc("Temporary encryption where no PIN is required.")
-        .addText(text => text
-                  .setPlaceholder("super-secret-key-1234")
-                  .setValue(this.plugin.settings.encryptionKey)
-                  .onChange(async (value) => {
-                    this.plugin.settings.encryptionKey = value;
-                    await this.plugin.saveSettings();
-                  }));
-  }
+		new Setting(containerEl)
+			.setName("Channel Name")
+			.setDesc("The channel room ID to connect to.")
+			.addText((text) =>
+				text
+					.setPlaceholder("vault-1")
+					.setValue(this.plugin.settings.channelName)
+					.onChange(async (value) => {
+						this.plugin.settings.channelName = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Encryption Key")
+			.setDesc("Temporary encryption where no PIN is required.")
+			.addText((text) =>
+				text
+					.setPlaceholder("super-secret-key-1234")
+					.setValue(this.plugin.settings.encryptionKey)
+					.onChange(async (value) => {
+						this.plugin.settings.encryptionKey = value;
+						await this.plugin.saveSettings();
+					})
+			);
+	}
 }

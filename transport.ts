@@ -99,9 +99,9 @@ async function readLoop(reader: any, app: App) {
 	let buffer = "";
 	try {
 		while (true) {
-      console.info("[OPV] Awaiting data.")
+			console.info("[OPV] Awaiting data.");
 			const { value, done } = await reader.read();
-      console.info("[OPV] Received data.");
+			console.info("[OPV] Received data.");
 			if (done) {
 				console.info("[OPV] Stream closed.");
 				break;
@@ -150,15 +150,11 @@ async function handleIn(message: any, app: App) {
 			console.info("[OPV] Chat message:", decrypted.content);
 			break;
 		case "file_start":
-			if (decrypted.fileId) {
-				incomingFiles.set(decrypted.fileId, []);
-				console.info(
-					`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
-				);
-			} else {
-				console.info("[OPV] file_start message missing fileId");
-				return;
-			}
+			// Ignore missing fileId for now
+			incomingFiles.set(decrypted.fileId, []);
+			console.info(
+				`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
+			);
 			break;
 		case "file_chunk":
 			if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
@@ -226,7 +222,7 @@ async function receiveFile(app: App, filename: string, content: string) {
 
 			const existingHash = await getHash(existingBuffer);
 			const incomingHash = await getHash(incomingBuffer);
-			
+
 			duplicate = existingHash === incomingHash;
 		}
 

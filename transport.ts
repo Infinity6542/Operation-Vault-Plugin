@@ -24,21 +24,23 @@ interface TransportPacket {
 const incomingFiles = new Map<string, Uint8Array[]>();
 
 export async function connectToServer(
-	serverHash: string,
+	url: string,
 	channelID: string,
 	app: App
 ) {
-	const url = "https://127.0.0.1:8080/ws";
+	const devHash = "YXMEXpP8LEhSlktl8CyCWK48BpeqUMTLqDK0eziKncE=";
 	const options: any = {
 		serverCertificateHashes: [
-			{ algorithm: "sha-256", value: conversion(serverHash) },
+			{ algorithm: "sha-256", value: conversion(devHash) },
 		],
 	};
 
 	try {
 		const transport = new WebTransport(url, options);
+
 		console.log("Attempting a connection to " + url);
 		await transport.ready;
+
 		new Notice("Connected to the server.");
 		console.log("WebTransport connection successful.");
 
@@ -97,7 +99,9 @@ async function readLoop(reader: any, app: App) {
 	let buffer = "";
 	try {
 		while (true) {
+      console.log("E");
 			const { value, done } = await reader.read();
+      console.log("Received");
 			if (done) {
 				console.log("Stream closed");
 				break;

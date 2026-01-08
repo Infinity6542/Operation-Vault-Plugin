@@ -38,11 +38,11 @@ export async function connectToServer(
 	try {
 		const transport = new WebTransport(url, options);
 
-		console.log("Attempting a connection to " + url);
+		console.info("Attempting a connection to " + url);
 		await transport.ready;
 
 		new Notice("Connected to the server.");
-		console.log("WebTransport connection successful.");
+		console.info("WebTransport connection successful.");
 
 		const stream = await transport.createBidirectionalStream();
 		const writer = stream.writable.getWriter();
@@ -99,11 +99,11 @@ async function readLoop(reader: any, app: App) {
 	let buffer = "";
 	try {
 		while (true) {
-      console.log("E");
+      console.info("[OPV] Awaiting data.")
 			const { value, done } = await reader.read();
-      console.log("Received");
+      console.info("[OPV] Received data.");
 			if (done) {
-				console.log("Stream closed");
+				console.info("[OPV] Stream closed.");
 				break;
 			}
 			buffer += decoder.decode(value, { stream: true });
@@ -118,7 +118,7 @@ async function readLoop(reader: any, app: App) {
 						const message = JSON.parse(chunk);
 						await handleIn(message, app);
 					} catch (e) {
-						console.error("Error parsing buffered chunk JSON", e);
+						console.error("[OPV] Error parsing buffered chunk JSON", e);
 					}
 				}
 				boundary = buffer.indexOf("\n");
@@ -126,7 +126,7 @@ async function readLoop(reader: any, app: App) {
 		}
 	} catch (e) {
 		console.error(
-			"Error reading from stream. It's probably closed, but just in case it isn't: ",
+			"[OPV] Error reading from stream. It's probably closed, but just in case it isn't: ",
 			e
 		);
 	}
@@ -134,29 +134,29 @@ async function readLoop(reader: any, app: App) {
 
 async function handleIn(message: any, app: App) {
 	if (message.type !== "message" || !message.payload) {
-		console.error("Invalid message", message);
+		console.error("[OPV] Invalid message", message);
 		return;
 	}
 	const decrypted = await decryptPacket(message.payload);
 
 	if (!decrypted) {
-		console.error("Empty decrypted content", decrypted);
+		console.error("[OPV] Empty decrypted content", decrypted);
 		return;
 	}
 
 	switch (decrypted.type) {
 		case "chat":
 			new Notice(`From peer: ${decrypted.content}`);
-			console.log("Chat message:", decrypted.content);
+			console.info("[OPV] Chat message:", decrypted.content);
 			break;
 		case "file_start":
 			if (decrypted.fileId) {
 				incomingFiles.set(decrypted.fileId, []);
-				console.log(
+				console.info(
 					`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
 				);
 			} else {
-				console.log("file_start message missing fileId");
+				console.info("[OPV] file_start message missing fileId");
 				return;
 			}
 			break;
@@ -164,17 +164,17 @@ async function handleIn(message: any, app: App) {
 			if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
 				const chunkBytes = conversion(decrypted.content);
 				incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
-				console.log(
-					`Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
+				console.info(
+					`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
 				);
 			} else {
-				console.log("file_chunk message with unknown fileId");
+				console.info("[OPV] file_chunk message with unknown fileId");
 				return;
 			}
 			break;
 		case "file_end":
 			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId!)) {
-				console.log("Unknown inner message type:", decrypted);
+				console.info("[OPV] Unknown inner message type:", decrypted);
 				break;
 			}
 			const chunks = incomingFiles.get(decrypted.fileId)!;
@@ -195,10 +195,10 @@ async function handleIn(message: any, app: App) {
 
 			await receiveFile(app, decrypted.filename || "unnamed", base64String);
 			incomingFiles.delete(decrypted.fileId);
-			console.log(`Received file: ${decrypted.fileId}`);
+			console.info(`[OPV] Received file: ${decrypted.fileId}`);
 			break;
 		default:
-			console.error("Unknown message type:", decrypted.type);
+			console.error("[OPV] Unknown message type:", decrypted.type);
 	}
 }
 
@@ -237,12 +237,12 @@ async function receiveFile(app: App, filename: string, content: string) {
 			new Notice(`File exists. Saving as ${finalName}`);
 		}
 
-		console.log(`Saving as ${finalName}`);
+		console.info(`[OPV] Saving as ${finalName}`);
 		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);
 		new Notice(`Saved file: ${finalName}.`);
 		return;
 	} catch (e) {
-		console.error("Error while saving file", e);
+		console.error("[OPV] Error while saving file", e);
 		new Notice("Error saving file.");
 	}
 }

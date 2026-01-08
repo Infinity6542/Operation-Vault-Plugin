@@ -19,7 +19,7 @@ export default class OpVaultPlugin extends Plugin {
 	activeWriter: any = null;
 
 	async onload() {
-		console.log("Loading client...");
+		console.info("[OPV] Loading client...");
     await this.loadSettings();
 
     this.addSettingTab(new vaultSettingsTab(this.app, this));
@@ -35,7 +35,7 @@ export default class OpVaultPlugin extends Plugin {
 		this.addRibbonIcon("text", "Chat", async () => {
 			if (!this.activeWriter) {
 				new Notice("Not connected to server.");
-				console.log("No active writer found.");
+				console.info("[OPV] No active writer found.");
 				return;
 			}
 			new Notice("Broadcasting message...");
@@ -48,14 +48,14 @@ export default class OpVaultPlugin extends Plugin {
 		this.addRibbonIcon("paper-plane", "Send file", async () => {
 			if (!this.activeWriter) {
 				new Notice("Not connected to server.");
-				console.log("No active writer found.");
+				console.info("[OPV] No active writer found.");
 				return;
 			}
 
 			const activeFile = this.app.workspace.getActiveFile();
 			if (!activeFile) {
 				new Notice("Open a file to send it!");
-				console.log("Active file is not a TFile.");
+				console.info("[OPV] Active file is not a TFile.");
 				return;
 			}
 
@@ -72,7 +72,7 @@ export default class OpVaultPlugin extends Plugin {
   }
 
 	onunload() {
-		console.log("Unloading...");
+		console.info("[OPV] Unloading...");
 	}
 }
 

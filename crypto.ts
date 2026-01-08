@@ -71,7 +71,7 @@ export async function decryptPacket(payload: string): Promise<any> {
 		const decryptedStr = decoder.decode(decryptedBytes);
 		return JSON.parse(decryptedStr);
 	} catch (e) {
-		console.error("Decryption failed:", e);
+		console.error("[OPV] Decryption failed:", e);
 		return null;
 	}
 }

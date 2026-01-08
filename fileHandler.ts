@@ -32,8 +32,8 @@ export async function sendFileChunked(
 		// ol' reliable
 		// new Notice(`Starting upload for ${file.name} (${totalBytes / 1024} KB).`);
 		const progress = new Notice(`Preparing ${file.name}...`, 300000);
-		console.log(
-			`Beginning to send ${file.name} (${totalBytes}:${totalChunks}).`
+		console.info(
+			`[OPV] Beginning to send ${file.name} (${totalBytes}:${totalChunks}).`
 		);
 
 		// Let server now file incoming
@@ -64,8 +64,8 @@ export async function sendFileChunked(
 
 			// Update progress
 			const percentage = Math.floor((chunkIndex / totalChunks) * 100);
-			console.log(
-				`Sending ${file.name} (${chunkIndex}/${totalChunks}) - ${percentage}%`
+			console.info(
+				`[OPV] Sending ${file.name} (${chunkIndex}/${totalChunks}) - ${percentage}%`
 			);
 
 			if (percentage > lastPercent) {
@@ -83,7 +83,7 @@ export async function sendFileChunked(
 			fileId: fileId,
 			filename: file.name,
 		});
-		console.log(`Finished sending ${file.name}.`);
+		console.info(`[OPV] Finished sending ${file.name}.`);
 
 		progress.setMessage(`File ${file.name} was sent.`);
 
@@ -91,7 +91,7 @@ export async function sendFileChunked(
 			progress.hide();
 		}, 3000);
 	} catch (e) {
-		console.error("Error sending file in chunks:", e);
+		console.error("[OPV] Error sending file in chunks:", e);
 		new Notice(`Error while sending file: ${e.message}`);
 	}
 }

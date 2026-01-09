@@ -59,7 +59,7 @@ export async function connectToServer(
 		await sendRawJSON(writer, joinPacket);
 		new Notice(`Joined the channel ${channelID}.`);
 
-		readLoop(reader, app, plugin.settings.encryptionKey, plugin, writer);
+		readLoop(reader, app, plugin, writer);
 		return writer;
 	} catch (e) {
 		console.error("Something went wrong", e);
@@ -97,7 +97,9 @@ async function sendRawJSON(writer: any, data: any) {
 //  await writer.write(data);
 //}
 
-async function readLoop(reader: any, app: App, key: string, plugin: any, writer: any) {
+// key: string
+// is not currently used and has been removed
+async function readLoop(reader: any, app: App, plugin: any, writer: any) {
 	const decoder = new TextDecoder();
 	let buffer = "";
 	try {

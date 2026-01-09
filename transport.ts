@@ -5,14 +5,16 @@ import {
 	getHash,
 	arrayBufferToBase64,
 } from "./crypto";
-import { nameFile } from "./fileHandler";
+import { nameFile, sendFileChunked } from "./fileHandler";
 
 interface innerMessage {
-	type: "chat" | "file_start" | "file_chunk" | "file_end";
-	content: string;
+	type: "chat" | "file_start" | "file_chunk" | "file_end" | "download_request";
+	content?: string;
 	filename?: string;
 	fileId?: string;
 	chunkIndex?: number;
+  shareId?: string;
+  pin?: string;
 }
 
 interface TransportPacket {
@@ -26,7 +28,8 @@ const incomingFiles = new Map<string, Uint8Array[]>();
 export async function connectToServer(
 	url: string,
 	channelID: string,
-	app: App
+	app: App,
+  plugin: any
 ) {
 	const devHash = "YXMEXpP8LEhSlktl8CyCWK48BpeqUMTLqDK0eziKncE=";
 	const options: any = {
@@ -56,7 +59,7 @@ export async function connectToServer(
 		await sendRawJSON(writer, joinPacket);
 		new Notice(`Joined the channel ${channelID}.`);
 
-		readLoop(reader, app);
+		readLoop(reader, app, plugin.settings.encryptionKey, plugin, writer);
 		return writer;
 	} catch (e) {
 		console.error("Something went wrong", e);
@@ -94,7 +97,7 @@ async function sendRawJSON(writer: any, data: any) {
 //  await writer.write(data);
 //}
 
-async function readLoop(reader: any, app: App) {
+async function readLoop(reader: any, app: App, key: string, plugin: any, writer: any) {
 	const decoder = new TextDecoder();
 	let buffer = "";
 	try {
@@ -114,7 +117,7 @@ async function readLoop(reader: any, app: App) {
 				if (chunk.length > 0) {
 					try {
 						const message = JSON.parse(chunk);
-						await handleIn(message, app);
+						await handleIn(message, app, plugin, writer);
 					} catch (e) {
 						console.error("[OPV] Error parsing buffered chunk JSON", e);
 					}
@@ -130,7 +133,7 @@ async function readLoop(reader: any, app: App) {
 	}
 }
 
-async function handleIn(message: any, app: App) {
+async function handleIn(message: any, app: App, plugin: any, writer: any) {
 	if (message.type !== "message" || !message.payload) {
 		console.error("[OPV] Invalid message", message);
 		return;
@@ -191,6 +194,30 @@ async function handleIn(message: any, app: App) {
 			incomingFiles.delete(decrypted.fileId);
 			console.info(`[OPV] Received file: ${decrypted.fileId}`);
 			break;
+    case "download_request":
+      console.info(`[OPV] Download request for: ${decrypted.shareId}`);
+      
+      const shareItem = plugin.settings.sharedItems.find((i: any) => i.id === decrypted.shareId);
+
+      if (!shareItem) {
+        console.error(`[OPV] No shared item found for ID: ${decrypted.shareId}`);
+        break;
+      }
+
+      if (shareItem.pin && shareItem.pin !== decrypted.pin) {
+        console.error(`[OPV] Invalid PIN for shared item ID: ${decrypted.shareId}`);
+        break;
+      }
+
+      const fileToSend = app.vault.getAbstractFileByPath(shareItem.path);
+      if (fileToSend instanceof TFile) {
+        new Notice(`Sending shared file: ${fileToSend.basename}`);
+        
+        await sendFileChunked(writer, plugin.settings.channelName, fileToSend, app);
+        shareItem.shares++;
+        plugin.saveSettings();
+      }
+      break;
 		default:
 			console.error("[OPV] Unknown message type:", decrypted.type);
 	}

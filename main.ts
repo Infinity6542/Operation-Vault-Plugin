@@ -1,18 +1,40 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
 import { connectToServer, sendSecureMessage } from "./transport";
 import { sendFileChunked } from "./fileHandler";
+
+export interface SharedItem {
+  id: string;
+  path: string;
+  pin?: string;
+  key: string;
+  createdAt: number;
+  shares: number;
+}
 
 interface settings {
 	serverUrl: string;
 	channelName: string;
 	encryptionKey: string;
+  sharedItems: SharedItem[];
 }
 
 const defaultSettings: settings = {
 	serverUrl: "https://127.0.0.1:8080/ws",
 	channelName: "vault-1",
 	encryptionKey: "wow-really-cool-secret-444",
+  sharedItems: [],
 };
+
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function generateKey(): string {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
 export default class OpVaultPlugin extends Plugin {
 	settings: settings;
@@ -29,7 +51,7 @@ export default class OpVaultPlugin extends Plugin {
 			const channel = this.settings.channelName;
 
 			new Notice("Trying connection...");
-			this.activeWriter = await connectToServer(url, channel, this.app);
+			this.activeWriter = await connectToServer(url, channel, this.app, this);
 		});
 
 		this.addRibbonIcon("text", "Chat", async () => {
@@ -66,6 +88,21 @@ export default class OpVaultPlugin extends Plugin {
 				this.app
 			);
 		});
+
+    this.addRibbonIcon("link", "Share file", async () => {
+      const activeFile = this.app.workspace.getActiveFile();
+      if (!activeFile) {
+        new Notice("Open a file to share it!");
+        console.info("[OPV] Active file is not a TFile.");
+        return;
+      }
+
+      new ShareModal(this.app, this, activeFile).open();
+    });
+
+    this.addRibbonIcon("download", "Download shared item", async () => {
+      new DownloadModal(this.app, this).open();
+    });
 	}
 
 	async loadSettings() {
@@ -121,17 +158,174 @@ class vaultSettingsTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
-			.setName("Encryption Key")
-			.setDesc("Temporary encryption where no PIN is required.")
-			.addText((text) =>
-				text
-					.setPlaceholder("super-secret-key-1234")
-					.setValue(this.plugin.settings.encryptionKey)
-					.onChange(async (value) => {
-						this.plugin.settings.encryptionKey = value;
-						await this.plugin.saveSettings();
-					})
-			);
-	}
+    containerEl.createEl("hr");
+    containerEl.createEl("h3", { text: "Shared Items" });
+
+    const shareList = containerEl.createEl("div");
+
+    if (this.plugin.settings.sharedItems.length === 0) {
+      shareList.createEl("p", { text: "No items are currently shared." });
+    } else {
+      this.plugin.settings.sharedItems.forEach((item, index) => {
+        const itemDiv = shareList.createEl("div", { cls: "setting-item" });;
+
+        const infoDiv = itemDiv.createEl("div", { cls: "setting-item-info" });
+        infoDiv.createEl("div", { text: item.path, cls: "setting-item-path" });
+
+        const controlDiv = itemDiv.createEl("div", { cls: "setting-item-controls" });
+
+        new Setting(controlDiv)
+          .addButton(btn => btn
+                      .setIcon("link")
+                      .setTooltip("Copy Share ID")
+                      .onClick(() => {
+                        navigator.clipboard.writeText(item.id);
+                        new Notice("Share ID copied to clipboard.");
+                      })
+          );
+
+        new Setting(controlDiv)
+          .addButton(btn => btn
+                      .setButtonText("Revoke")
+                      .setWarning()
+                      .onClick(async() => {
+                        this.plugin.settings.sharedItems.splice(index, 1);
+                        await this.plugin.saveSettings();
+                        this.display();
+                      })
+        );
+      });
+    }
+  }
+}
+
+export class ShareModal extends Modal {
+  plugin: OpVaultPlugin;
+  file: TFile;
+  pin: string = "";
+
+  constructor(app: App, plugin: OpVaultPlugin, file: TFile) {
+    super(app);
+    this.plugin = plugin;
+    this.file = file;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h2", { text: `Share ${this.file.name}` });
+
+    new Setting(contentEl)
+      .setName("PIN (optional)")
+      .setDesc("Set a PIN to protect access to this shared item.")
+      .addText((text) =>
+        text
+          .setPlaceholder("1234")
+          .onChange((value) => {
+            this.pin = value;
+          })
+      );
+
+    new Setting(contentEl).addButton((btn) => {
+      btn
+        .setButtonText("Create Share")
+        .setCta()
+        .onClick(async () => {
+          this.createShare();
+          this.close();
+        });
+    });
+  }
+
+    async createShare() {
+      const newShare: SharedItem = {
+        id: generateUUID(),
+        path: this.file.path,
+        pin: this.pin ? this.pin : undefined,
+        key: generateKey(),
+        createdAt: Date.now(),
+        shares: 0,
+      };
+
+      this.plugin.settings.sharedItems.push(newShare);
+      await this.plugin.saveSettings();
+      new Notice(`Shared ${this.file.name} successfully!`);
+    }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+
+}
+
+export class DownloadModal extends Modal {
+  plugin: OpVaultPlugin;
+  shareId: string;
+  pin: string = "";
+
+  constructor(app: App, plugin: OpVaultPlugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h2", { text: `Download Shared Item` });
+
+    new Setting(contentEl)
+      .setName("Share ID")
+      .setDesc("Enter the Share ID provided to you.")
+      .addText((text) =>
+        text
+          .setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
+          .onChange((value) => {
+            this.shareId = value;
+          })
+      );
+
+    new Setting(contentEl)
+      .setName("PIN")
+      .setDesc("Enter the PIN if the shared item is protected.")
+      .addText((text) =>
+        text
+          .setPlaceholder("1234")
+          .onChange((value) => {
+            this.pin = value;
+          })
+      );
+
+    new Setting(contentEl).addButton((btn) => {
+      btn
+        .setButtonText("Download")
+        .setCta()
+        .onClick(async () => {
+          this.startDownload();
+          this.close();
+        });
+    });
+  }
+
+  async startDownload() {
+    if (!this.shareId) {
+      new Notice("Please enter a valid Share ID.");
+      console.error("[OPV] No Share ID provided.");
+      return;
+    }
+
+    new Notice(`Starting download for Share ID: ${this.shareId}`);
+    console.info(`[OPV] Starting download for Share ID: ${this.shareId}`);
+
+    await sendSecureMessage(this.plugin.activeWriter, this.plugin.settings.channelName, {
+      type: "download_request",
+      shareId: this.shareId,
+      pin: this.pin,
+    });
+
+    this.close();
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
 }

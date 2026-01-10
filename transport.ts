@@ -13,8 +13,8 @@ interface innerMessage {
 	filename?: string;
 	fileId?: string;
 	chunkIndex?: number;
-  shareId?: string;
-  pin?: string;
+	shareId?: string;
+	pin?: string;
 }
 
 interface TransportPacket {
@@ -29,7 +29,7 @@ export async function connectToServer(
 	url: string,
 	channelID: string,
 	app: App,
-  plugin: any
+	plugin: any
 ) {
 	const devHash = "YXMEXpP8LEhSlktl8CyCWK48BpeqUMTLqDK0eziKncE=";
 	const options: any = {
@@ -196,30 +196,41 @@ async function handleIn(message: any, app: App, plugin: any, writer: any) {
 			incomingFiles.delete(decrypted.fileId);
 			console.info(`[OPV] Received file: ${decrypted.fileId}`);
 			break;
-    case "download_request":
-      console.info(`[OPV] Download request for: ${decrypted.shareId}`);
-      
-      const shareItem = plugin.settings.sharedItems.find((i: any) => i.id === decrypted.shareId);
+		case "download_request":
+			console.info(`[OPV] Download request for: ${decrypted.shareId}`);
 
-      if (!shareItem) {
-        console.error(`[OPV] No shared item found for ID: ${decrypted.shareId}`);
-        break;
-      }
+			const shareItem = plugin.settings.sharedItems.find(
+				(i: any) => i.id === decrypted.shareId
+			);
 
-      if (shareItem.pin && shareItem.pin !== decrypted.pin) {
-        console.error(`[OPV] Invalid PIN for shared item ID: ${decrypted.shareId}`);
-        break;
-      }
+			if (!shareItem) {
+				console.error(
+					`[OPV] No shared item found for ID: ${decrypted.shareId}`
+				);
+				break;
+			}
 
-      const fileToSend = app.vault.getAbstractFileByPath(shareItem.path);
-      if (fileToSend instanceof TFile) {
-        new Notice(`Sending shared file: ${fileToSend.basename}`);
-        
-        await sendFileChunked(writer, plugin.settings.channelName, fileToSend, app);
-        shareItem.shares++;
-        plugin.saveSettings();
-      }
-      break;
+			if (shareItem.pin && shareItem.pin !== decrypted.pin) {
+				console.error(
+					`[OPV] Invalid PIN for shared item ID: ${decrypted.shareId}`
+				);
+				break;
+			}
+
+			const fileToSend = app.vault.getAbstractFileByPath(shareItem.path);
+			if (fileToSend instanceof TFile) {
+				new Notice(`Sending shared file: ${fileToSend.basename}`);
+
+				await sendFileChunked(
+					writer,
+					plugin.settings.channelName,
+					fileToSend,
+					app
+				);
+				shareItem.shares++;
+				plugin.saveSettings();
+			}
+			break;
 		default:
 			console.error("[OPV] Unknown message type:", decrypted.type);
 	}

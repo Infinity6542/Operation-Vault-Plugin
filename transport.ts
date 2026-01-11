@@ -4,6 +4,7 @@ import {
 	decryptPacket,
 	getHash,
 	arrayBufferToBase64,
+  encryptBinary,
 } from "./crypto";
 import { nameFile, sendFileChunked } from "./fileHandler";
 
@@ -280,3 +281,42 @@ async function receiveFile(app: App, filename: string, content: string) {
 		new Notice("Error saving file.");
 	}
 }
+export async function upload(transport: any, file: TFile, app: App, shareId: string, plugin: any, pin?: string) {
+  if (!transport) return new Notice ("No active connection.");
+
+  try {
+    new Notice(`Uploading file: ${file.name}`);
+
+    const stream = await transport.createBidirectionalStream();
+    const writer = stream.writable.getWriter();
+    // reader is not used in upload
+    // const reader = stream.readable.getReader();
+
+    const header = JSON.stringify({ type: "upload", payload: shareId}) + "\n";
+    const encoder = new TextEncoder();
+    await writer.write(encoder.encode(header));
+
+    const fileData = await app.vault.readBinary(file);
+    const nameBytes = encoder.encode(file.name);
+
+    const totalSize = 2 + nameBytes.length + fileData.byteLength;
+    const packageBuffer = new Uint8Array(totalSize);
+
+    packageBuffer[0] = nameBytes.length & 0xff;
+    packageBuffer[1] = (nameBytes.length >>8) & 0xff;
+    packageBuffer.set(nameBytes, 2);
+    packageBuffer.set(new Uint8Array(fileData), 2 + nameBytes.length);
+
+    const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
+    const encryptedData = await encryptBinary(packageBuffer.buffer, key);
+
+    await writer.write(encryptedData);
+    await writer.close();
+
+    new Notice(`Completed upload of file: ${file.name}`);
+  } catch (e) {
+    console.error("Error during file upload", e);
+    new Notice("Error during file upload.");
+  }
+}
+

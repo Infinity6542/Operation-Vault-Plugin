@@ -7,7 +7,7 @@ import {
 	Setting,
 	TFile,
 } from "obsidian";
-import { connectToServer, sendSecureMessage } from "./transport";
+import { connectToServer, sendSecureMessage, upload } from "./transport";
 import { sendFileChunked } from "./fileHandler";
 
 export interface SharedItem {
@@ -51,6 +51,7 @@ function generateKey(): string {
 export default class OpVaultPlugin extends Plugin {
 	settings: settings;
 	activeWriter: any = null;
+  activeTransport: any = null;
 
 	async onload() {
 		console.info("[OPV] Loading client...");
@@ -63,7 +64,10 @@ export default class OpVaultPlugin extends Plugin {
 			const channel = this.settings.channelName;
 
 			new Notice("Trying connection...");
-			this.activeWriter = await connectToServer(url, channel, this.app, this);
+
+      // activeWriter is defined when connectToServer is called
+			// this.activeWriter = await connectToServer(url, channel, this.app, this);
+      this.activeTransport = await connectToServer(url, channel, this.app, this);
 		});
 
 		this.addRibbonIcon("text", "Chat", async () => {
@@ -77,6 +81,7 @@ export default class OpVaultPlugin extends Plugin {
 				type: "chat",
 				content: "Helloooooo!",
 			});
+      new Notice("Send the message :)");
 		});
 
 		this.addRibbonIcon("paper-plane", "Send file", async () => {
@@ -217,6 +222,7 @@ export class ShareModal extends Modal {
 	plugin: OpVaultPlugin;
 	file: TFile;
 	pin: string = "";
+  upload: boolean = false;
 
 	constructor(app: App, plugin: OpVaultPlugin, file: TFile) {
 		super(app);
@@ -237,6 +243,13 @@ export class ShareModal extends Modal {
 				})
 			);
 
+    new Setting(contentEl)
+      .setName("Upload to cloud")
+      .setDesc("Store offline and offsite.")
+      .addToggle((toggle) =>
+                toggle.onChange((v) => (this.upload = v))
+    );
+
 		new Setting(contentEl).addButton((btn) => {
 			btn
 				.setButtonText("Create Share")
@@ -249,14 +262,24 @@ export class ShareModal extends Modal {
 	}
 
 	async createShare() {
-		const newShare: SharedItem = {
-			id: generateUUID(),
+		const shareId = generateUUID();
+    const newShare: SharedItem = {
+			id: shareId,
 			path: this.file.path,
 			pin: this.pin ? this.pin : undefined,
 			key: generateKey(),
 			createdAt: Date.now(),
 			shares: 0,
 		};
+
+    if (this.upload) {
+      if (!this.plugin.activeTransport) {
+        new Notice("Not connected to server.");
+        console.info("[OPV] No active transport found.");
+        return;
+      }
+      await upload(this.plugin.activeTransport, this.file, this.app, shareId);
+    }
 
 		this.plugin.settings.sharedItems.push(newShare);
 		await this.plugin.saveSettings();

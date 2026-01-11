@@ -19,7 +19,8 @@ export async function sendFileChunked(
 	writer: any,
 	channel: string,
 	file: TFile,
-	app: App
+	app: App,
+  senderId: string,
 ) {
 	const chunkSize = 64 * 1024; // 64KB
 
@@ -37,7 +38,7 @@ export async function sendFileChunked(
 		);
 
 		// Let server now file incoming
-		await sendSecureMessage(writer, channel, {
+		await sendSecureMessage(writer, channel, senderId, {
 			type: "file_start",
 			content: "",
 			filename: file.name,
@@ -52,7 +53,7 @@ export async function sendFileChunked(
 			const slice = arrayBuffer.slice(offset, offset + chunkSize);
 			const base64Chunk = arrayBufferTobase64(slice);
 
-			await sendSecureMessage(writer, channel, {
+			await sendSecureMessage(writer, channel, senderId, {
 				type: "file_chunk",
 				content: base64Chunk,
 				fileId: fileId,
@@ -77,7 +78,7 @@ export async function sendFileChunked(
 		}
 
 		// Transfer end notice
-		await sendSecureMessage(writer, channel, {
+		await sendSecureMessage(writer, channel, senderId, {
 			type: "file_end",
 			content: "",
 			fileId: fileId,

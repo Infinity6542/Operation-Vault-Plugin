@@ -23,6 +23,7 @@ interface settings {
 	serverUrl: string;
 	channelName: string;
 	encryptionKey: string;
+  senderId: string;
 	sharedItems: SharedItem[];
 }
 
@@ -30,6 +31,7 @@ const defaultSettings: settings = {
 	serverUrl: "https://127.0.0.1:8080/ws",
 	channelName: "vault-1",
 	encryptionKey: "wow-really-cool-secret-444",
+  senderId: "",
 	sharedItems: [],
 };
 
@@ -52,12 +54,31 @@ export default class OpVaultPlugin extends Plugin {
 	settings: settings;
 	activeWriter: any = null;
   activeTransport: any = null;
+  statusBarItem: HTMLElement;
+  onlineUsers: string[] = [];
 
 	async onload() {
 		console.info("[OPV] Loading client...");
 		await this.loadSettings();
 
+    if (!this.settings.senderId) {
+      this.settings.senderId = generateUUID();
+      await this.saveSettings();
+      console.info(`[OPV] Generated new sender ID: ${this.settings.senderId}`);
+    }
+
 		this.addSettingTab(new vaultSettingsTab(this.app, this));
+
+    this.statusBarItem = this.addStatusBarItem();
+    this.updatePresence(0);
+    this.statusBarItem.addClass("mod-clickable");
+    this.statusBarItem.addEventListener("click", () => {
+      if (this.onlineUsers.length > 0) {
+        new Notice(`Online users:\n${this.onlineUsers.join("\n")}`);
+      } else {
+        new Notice("No other users online.");
+      };
+    });
 
 		this.addRibbonIcon("dice", "Test connection", async () => {
 			const url = this.settings.serverUrl;
@@ -72,7 +93,7 @@ export default class OpVaultPlugin extends Plugin {
         console.error("[OPV] Already connected to server.");
         return;
       }
-      this.activeTransport = await connectToServer(url, channel, this.app, this);
+      this.activeTransport = await connectToServer(url, channel, this.settings.senderId, this.app, this);
 		});
 
 		this.addRibbonIcon("text", "Chat", async () => {
@@ -82,7 +103,7 @@ export default class OpVaultPlugin extends Plugin {
 				return;
 			}
 			new Notice("Broadcasting message...");
-			await sendSecureMessage(this.activeWriter, this.settings.channelName, {
+			await sendSecureMessage(this.activeWriter, this.settings.channelName, this.settings.senderId, {
 				type: "chat",
 				content: "Helloooooo!",
 			});
@@ -107,7 +128,8 @@ export default class OpVaultPlugin extends Plugin {
 				this.activeWriter,
 				this.settings.channelName,
 				activeFile,
-				this.app
+				this.app,
+        this.settings.senderId,
 			);
 		});
 
@@ -134,6 +156,16 @@ export default class OpVaultPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+  updatePresence(count: number) {
+    if (!this.statusBarItem) return;
+
+    if (count > 0) {
+      this.statusBarItem.setText(`🟢 Online: (${count})`);
+    } else {
+      this.statusBarItem.setText(`🔴 Offline`);
+    }
+  }
 
 	onunload() {
 		console.info("[OPV] We're done here... Bye bye :)");

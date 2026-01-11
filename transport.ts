@@ -22,6 +22,7 @@ interface innerMessage {
 interface TransportPacket {
 	type: "join" | "message";
 	channel_id: string;
+  sender_id: string;
 	payload: string; // Encrypted
 }
 
@@ -30,6 +31,7 @@ const incomingFiles = new Map<string, Uint8Array[]>();
 export async function connectToServer(
 	url: string,
 	channelID: string,
+  senderId: string,
 	app: App,
 	plugin: any
 ): Promise<any> {
@@ -56,6 +58,7 @@ export async function connectToServer(
 		const joinPacket: TransportPacket = {
 			type: "join",
 			channel_id: channelID,
+      sender_id: senderId,
 			payload: "Hi!",
 		};
 		await sendRawJSON(writer, joinPacket);
@@ -64,6 +67,20 @@ export async function connectToServer(
     plugin.activeWriter = writer;
 
 		readLoop(reader, app, plugin, writer);
+
+    setInterval(async () => {
+      if (writer) {
+        const packet = {
+          type: "heartbeat",
+          channel_id: channelID,
+          sender_id: plugin.settings.senderId,
+          payload: "ping",
+        };
+        await sendRawJSON(writer, packet);
+        console.info("[OPV] Sent heartbeat ping.");
+      }
+    }, 10000);
+
 		return transport;
 	} catch (e) {
 		console.error("Something went wrong", e);
@@ -75,6 +92,7 @@ export async function connectToServer(
 export async function sendSecureMessage(
 	writer: any,
 	channelId: string,
+  senderId: string,
 	innerData: innerMessage
 ) {
 	const encryptedPayload = await encryptPacket(innerData);
@@ -82,6 +100,7 @@ export async function sendSecureMessage(
 	const packet: TransportPacket = {
 		type: "message",
 		channel_id: channelId,
+    sender_id: senderId,
 		payload: encryptedPayload,
 	};
 
@@ -123,6 +142,21 @@ async function readLoop(reader: any, app: App, plugin: any, writer: any) {
 				if (chunk.length > 0) {
 					try {
 						const message = JSON.parse(chunk);
+
+            if (message.type === "user_list") {
+              try {
+                const users = JSON.parse(message.payload);
+                plugin.onlineUsers = users;
+                plugin.updatePresence(users.length);
+                console.info("[OPV] Current users in channel:", users);
+                new Notice(`Currently online: ${users.length}`)
+              } catch (e) {
+                console.error("[OPV] Error parsing user list", e);
+              }
+              boundary = buffer.indexOf("\n");
+              continue;
+            }
+
 						await handleIn(message, app, plugin, writer);
 					} catch (e) {
 						console.error("[OPV] Error parsing buffered chunk JSON", e);
@@ -229,7 +263,8 @@ async function handleIn(message: any, app: App, plugin: any, writer: any) {
 					writer,
 					plugin.settings.channelName,
 					fileToSend,
-					app
+					app,
+          plugin.settings.senderId,
 				);
 				shareItem.shares++;
 				plugin.saveSettings();

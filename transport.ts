@@ -354,7 +354,6 @@ export async function upload (modal: any, shareId: string, pin?: string) {
     packageBuffer.set(new Uint8Array(fileData), 2 + nameBytes.length);
 
     const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
-    console.log(key);
     const encryptedData = await encryptBinary(packageBuffer.buffer, key);
 
     await writer.write(encryptedData);
@@ -405,7 +404,6 @@ export async function download(shareId: string, app: App, plugin: any, pin?: str
     }
 
     const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
-    console.log(key);
     let decrypted = await decryptBinary(encrypted, key);
 
     if (!decrypted) {

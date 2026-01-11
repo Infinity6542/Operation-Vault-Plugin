@@ -103,7 +103,6 @@ export async function encryptBinary(data: ArrayBuffer, keyStr: string): Promise<
 
 export async function decryptBinary(data: Uint8Array, keyStr: string): Promise<Uint8Array> | null {
   try {
-    console.log(data);
     const key = await getKey(keyStr);
     const iv = data.slice(0, 12);
     const encrypted = data.slice(12);

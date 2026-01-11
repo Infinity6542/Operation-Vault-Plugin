@@ -96,7 +96,7 @@ export async function sendFileChunked(
 	}
 }
 
-// This assumes that the filename has an extension
+// This assumes that the filename has an extension which should probably be handled tbf
 //TODO: effectively handle files without extensions
 export function nameFile(oName: string, duplicate?: boolean): string {
 	const name = oName.split("");

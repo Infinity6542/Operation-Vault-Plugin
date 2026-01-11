@@ -4,8 +4,8 @@ import {
 	decryptPacket,
 	getHash,
 	arrayBufferToBase64,
-  encryptBinary,
-  decryptBinary,
+	encryptBinary,
+	decryptBinary,
 } from "./crypto";
 import { nameFile, sendFileChunked } from "./fileHandler";
 
@@ -22,7 +22,7 @@ interface innerMessage {
 interface TransportPacket {
 	type: "join" | "message";
 	channel_id: string;
-  sender_id: string;
+	sender_id: string;
 	payload: string; // Encrypted
 }
 
@@ -33,8 +33,8 @@ export async function connectToServer(
 	channelID: string,
 	plugin: any
 ): Promise<any> {
-  const senderId = plugin.settings.senderId;
-  const app = plugin.app;
+	const senderId = plugin.settings.senderId;
+	const app = plugin.app;
 	const devHash = "YXMEXpP8LEhSlktl8CyCWK48BpeqUMTLqDK0eziKncE=";
 	const options: any = {
 		serverCertificateHashes: [
@@ -58,28 +58,28 @@ export async function connectToServer(
 		const joinPacket: TransportPacket = {
 			type: "join",
 			channel_id: channelID,
-      sender_id: senderId,
+			sender_id: senderId,
 			payload: "Hi!",
 		};
 		await sendRawJSON(writer, joinPacket);
 		new Notice(`Joined the channel ${channelID}.`);
 
-    plugin.activeWriter = writer;
+		plugin.activeWriter = writer;
 
 		readLoop(reader, app, plugin, writer);
 
-    setInterval(async () => {
-      if (writer) {
-        const packet = {
-          type: "heartbeat",
-          channel_id: channelID,
-          sender_id: plugin.settings.senderId,
-          payload: "ping",
-        };
-        await sendRawJSON(writer, packet);
-        console.info("[OPV] Sent heartbeat ping.");
-      }
-    }, 10000);
+		setInterval(async () => {
+			if (writer) {
+				const packet = {
+					type: "heartbeat",
+					channel_id: channelID,
+					sender_id: plugin.settings.senderId,
+					payload: "ping",
+				};
+				await sendRawJSON(writer, packet);
+				console.info("[OPV] Sent heartbeat ping.");
+			}
+		}, 10000);
 
 		return transport;
 	} catch (e) {
@@ -92,7 +92,7 @@ export async function connectToServer(
 export async function sendSecureMessage(
 	writer: any,
 	channelId: string,
-  senderId: string,
+	senderId: string,
 	innerData: innerMessage
 ) {
 	const encryptedPayload = await encryptPacket(innerData);
@@ -100,7 +100,7 @@ export async function sendSecureMessage(
 	const packet: TransportPacket = {
 		type: "message",
 		channel_id: channelId,
-    sender_id: senderId,
+		sender_id: senderId,
 		payload: encryptedPayload,
 	};
 
@@ -323,129 +323,139 @@ async function receiveFile(app: App, filename: string, content: string) {
 	}
 }
 
-export async function upload (modal: any, shareId: string, pin?: string) {
-  const file = modal.file;
-  const app = modal.app;
-  const plugin = modal.plugin;
-  const transport = plugin.activeTransport;
-  if (!transport) return new Notice ("No active connection.");
+export async function upload(modal: any, shareId: string, pin?: string) {
+	const file = modal.file;
+	const app = modal.app;
+	const plugin = modal.plugin;
+	const transport = plugin.activeTransport;
+	if (!transport) return new Notice("No active connection.");
 
-  try {
-    new Notice(`Uploading file: ${file.name}`);
+	try {
+		new Notice(`Uploading file: ${file.name}`);
 
-    const stream = await transport.createBidirectionalStream();
-    const writer = stream.writable.getWriter();
-    // reader is not used in upload
-    // const reader = stream.readable.getReader();
+		const stream = await transport.createBidirectionalStream();
+		const writer = stream.writable.getWriter();
+		// reader is not used in upload
+		// const reader = stream.readable.getReader();
 
-    const header = JSON.stringify({ type: "upload", payload: shareId}) + "\n";
-    const encoder = new TextEncoder();
-    await writer.write(encoder.encode(header));
+		const header = JSON.stringify({ type: "upload", payload: shareId }) + "\n";
+		const encoder = new TextEncoder();
+		await writer.write(encoder.encode(header));
 
-    const fileData = await app.vault.readBinary(file);
-    const nameBytes = encoder.encode(file.name);
+		const fileData = await app.vault.readBinary(file);
+		const nameBytes = encoder.encode(file.name);
 
-    const totalSize = 2 + nameBytes.length + fileData.byteLength;
-    const packageBuffer = new Uint8Array(totalSize);
+		const totalSize = 2 + nameBytes.length + fileData.byteLength;
+		const packageBuffer = new Uint8Array(totalSize);
 
-    packageBuffer[0] = nameBytes.length & 0xff;
-    packageBuffer[1] = (nameBytes.length >>8) & 0xff;
-    packageBuffer.set(nameBytes, 2);
-    packageBuffer.set(new Uint8Array(fileData), 2 + nameBytes.length);
+		packageBuffer[0] = nameBytes.length & 0xff;
+		packageBuffer[1] = (nameBytes.length >> 8) & 0xff;
+		packageBuffer.set(nameBytes, 2);
+		packageBuffer.set(new Uint8Array(fileData), 2 + nameBytes.length);
 
-    const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
-    const encryptedData = await encryptBinary(packageBuffer.buffer, key);
+		const key = pin && pin.length > 0 ? pin : plugin.settings.encryptionKey;
+		const encryptedData = await encryptBinary(packageBuffer.buffer, key);
 
-    await writer.write(encryptedData);
-    await writer.close();
+		await writer.write(encryptedData);
+		await writer.close();
 
-    new Notice(`Completed upload of file: ${file.name}`);
-  } catch (e) {
-    console.error("Error during file upload", e);
-    new Notice("Error during file upload.");
-  }
+		new Notice(`Completed upload of file: ${file.name}`);
+	} catch (e) {
+		console.error("Error during file upload", e);
+		new Notice("Error during file upload.");
+	}
 }
 
-export async function download(shareId: string, app: App, plugin: any, pin?: string) {
-  const transport = plugin.activeTransport;
-  if (!transport) return new Notice ("No active connection.");
+export async function download(
+	shareId: string,
+	app: App,
+	plugin: any,
+	pin?: string
+) {
+	const transport = plugin.activeTransport;
+	if (!transport) return new Notice("No active connection.");
 
-  try {
-    new Notice(`Downloading item "${shareId}"`);
+	try {
+		new Notice(`Downloading item "${shareId}"`);
 
-    const stream = await transport.createBidirectionalStream();
-    const writer = stream.writable.getWriter();
-    const reader = stream.readable.getReader();
+		const stream = await transport.createBidirectionalStream();
+		const writer = stream.writable.getWriter();
+		const reader = stream.readable.getReader();
 
-    const header = JSON.stringify({ type: "download", payload: shareId}) + "\n";
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    await writer.write(encoder.encode(header));
+		const header =
+			JSON.stringify({ type: "download", payload: shareId }) + "\n";
+		const encoder = new TextEncoder();
+		const decoder = new TextDecoder();
+		await writer.write(encoder.encode(header));
 
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      size += value.length;
-    }
+		const chunks: Uint8Array[] = [];
+		let size = 0;
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			chunks.push(value);
+			size += value.length;
+		}
 
-    if (size === 0) {
-      new Notice("File is empty or is nonexistent.");
-      return;
-    }
+		if (size === 0) {
+			new Notice("File is empty or is nonexistent.");
+			return;
+		}
 
-    const encrypted = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      encrypted.set(chunk, offset);
-      offset += chunk.length;
-    }
+		const encrypted = new Uint8Array(size);
+		let offset = 0;
+		for (const chunk of chunks) {
+			encrypted.set(chunk, offset);
+			offset += chunk.length;
+		}
 
-    const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
-    let decrypted = await decryptBinary(encrypted, key);
+		const key = pin && pin.length > 0 ? pin : plugin.settings.encryptionKey;
+		let decrypted = await decryptBinary(encrypted, key);
 
-    if (!decrypted) {
-      new Notice("Decryption failed. Possibly wrong PIN or key.");
-      return;
-    }
+		if (!decrypted) {
+			new Notice("Decryption failed. Possibly wrong PIN or key.");
+			return;
+		}
 
-    const nameLen = (decrypted[0]) | (decrypted[1] << 8);
-    const nameBytes = decrypted.slice(2, 2 + nameLen);
-    const name = decoder.decode(nameBytes);
-    decrypted = decrypted.slice(2 + nameLen);
+		const nameLen = decrypted[0] | (decrypted[1] << 8);
+		const nameBytes = decrypted.slice(2, 2 + nameLen);
+		const name = decoder.decode(nameBytes);
+		decrypted = decrypted.slice(2 + nameLen);
 
-    if (decrypted.buffer instanceof ArrayBuffer) {
-      receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
-    } else {
-      new Notice("Decrypted data is invalid.");
-    }
-  } catch (e) {
-    console.error("[OPV] Error during file download", e);
-    new Notice("Error during file download. Check console for more information.");
-  }
+		if (decrypted.buffer instanceof ArrayBuffer) {
+			receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
+		} else {
+			new Notice("Decrypted data is invalid.");
+		}
+	} catch (e) {
+		console.error("[OPV] Error during file download", e);
+		new Notice(
+			"Error during file download. Check console for more information."
+		);
+	}
 }
 
 export async function remove(transport: any, shareId: string) {
-  if (!transport) return new Notice ("No active connection.");
+	if (!transport) return new Notice("No active connection.");
 
-  try {
-    const encoder = new TextEncoder();
-    const stream = await transport.createBidirectionalStream();
-    const writer = stream.writable.getWriter();
-    // In the future, read the response to make sure that the operation
-    // was successful.
-    // const reader = stream.readable.getReader();
-    
-    const header = JSON.stringify({ type: "remove", payload: shareId}) + "\n";
-    await writer.write(encoder.encode(header));
-    await writer.close();
+	try {
+		const encoder = new TextEncoder();
+		const stream = await transport.createBidirectionalStream();
+		const writer = stream.writable.getWriter();
+		// In the future, read the response to make sure that the operation
+		// was successful.
+		// const reader = stream.readable.getReader();
 
-    new Notice(`Delete request sent for item "${shareId}"`);
-    console.info(`[OPV] Delete request sent for item "${shareId}"`);
-  } catch (e) {
-    console.error("Error during delete request", e);
-    new Notice("Error during delete request. Check the console for more information.");
-  }
+		const header = JSON.stringify({ type: "remove", payload: shareId }) + "\n";
+		await writer.write(encoder.encode(header));
+		await writer.close();
+
+		new Notice(`Delete request sent for item "${shareId}"`);
+		console.info(`[OPV] Delete request sent for item "${shareId}"`);
+	} catch (e) {
+		console.error("Error during delete request", e);
+		new Notice(
+			"Error during delete request. Check the console for more information."
+		);
+	}
 }

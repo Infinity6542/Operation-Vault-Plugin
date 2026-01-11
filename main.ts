@@ -7,7 +7,13 @@ import {
 	Setting,
 	TFile,
 } from "obsidian";
-import { connectToServer, sendSecureMessage, upload, download, remove } from "./transport";
+import {
+	connectToServer,
+	sendSecureMessage,
+	upload,
+	download,
+	remove,
+} from "./transport";
 import { sendFileChunked } from "./fileHandler";
 
 export interface SharedItem {
@@ -23,7 +29,7 @@ interface settings {
 	serverUrl: string;
 	channelName: string;
 	encryptionKey: string;
-  senderId: string;
+	senderId: string;
 	sharedItems: SharedItem[];
 }
 
@@ -31,7 +37,7 @@ const defaultSettings: settings = {
 	serverUrl: "https://127.0.0.1:8080/ws",
 	channelName: "vault-1",
 	encryptionKey: "wow-really-cool-secret-444",
-  senderId: "",
+	senderId: "",
 	sharedItems: [],
 };
 
@@ -53,32 +59,32 @@ function generateKey(): string {
 export default class OpVaultPlugin extends Plugin {
 	settings: settings;
 	activeWriter: any = null;
-  activeTransport: any = null;
-  statusBarItem: HTMLElement;
-  onlineUsers: string[] = [];
+	activeTransport: any = null;
+	statusBarItem: HTMLElement;
+	onlineUsers: string[] = [];
 
 	async onload() {
 		console.info("[OPV] Loading client...");
 		await this.loadSettings();
 
-    if (!this.settings.senderId) {
-      this.settings.senderId = generateUUID();
-      await this.saveSettings();
-      console.info(`[OPV] Generated new sender ID: ${this.settings.senderId}`);
-    }
+		if (!this.settings.senderId) {
+			this.settings.senderId = generateUUID();
+			await this.saveSettings();
+			console.info(`[OPV] Generated new sender ID: ${this.settings.senderId}`);
+		}
 
 		this.addSettingTab(new vaultSettingsTab(this.app, this));
 
-    this.statusBarItem = this.addStatusBarItem();
-    this.updatePresence(0);
-    this.statusBarItem.addClass("mod-clickable");
-    this.statusBarItem.addEventListener("click", () => {
-      if (this.onlineUsers.length > 0) {
-        new Notice(`Online users:\n${this.onlineUsers.join("\n")}`);
-      } else {
-        new Notice("No other users online.");
-      };
-    });
+		this.statusBarItem = this.addStatusBarItem();
+		this.updatePresence(0);
+		this.statusBarItem.addClass("mod-clickable");
+		this.statusBarItem.addEventListener("click", () => {
+			if (this.onlineUsers.length > 0) {
+				new Notice(`Online users:\n${this.onlineUsers.join("\n")}`);
+			} else {
+				new Notice("No other users online.");
+			}
+		});
 
 		this.addRibbonIcon("dice", "Test connection", async () => {
 			const url = this.settings.serverUrl;
@@ -86,14 +92,14 @@ export default class OpVaultPlugin extends Plugin {
 
 			new Notice("Trying connection...");
 
-      // activeWriter is defined when connectToServer is called
+			// activeWriter is defined when connectToServer is called
 			// this.activeWriter = await connectToServer(url, channel, this.app, this);
-      if (this.activeTransport) {
-        new Notice("Looks like you're already connected!");
-        console.error("[OPV] Already connected to server.");
-        return;
-      }
-      this.activeTransport = await connectToServer(url, channel, this);
+			if (this.activeTransport) {
+				new Notice("Looks like you're already connected!");
+				console.error("[OPV] Already connected to server.");
+				return;
+			}
+			this.activeTransport = await connectToServer(url, channel, this);
 		});
 
 		this.addRibbonIcon("text", "Chat", async () => {
@@ -103,11 +109,16 @@ export default class OpVaultPlugin extends Plugin {
 				return;
 			}
 			new Notice("Broadcasting message...");
-			await sendSecureMessage(this.activeWriter, this.settings.channelName, this.settings.senderId, {
-				type: "chat",
-				content: "Helloooooo!",
-			});
-      new Notice("Sent the message :)");
+			await sendSecureMessage(
+				this.activeWriter,
+				this.settings.channelName,
+				this.settings.senderId,
+				{
+					type: "chat",
+					content: "Helloooooo!",
+				}
+			);
+			new Notice("Sent the message :)");
 		});
 
 		this.addRibbonIcon("paper-plane", "Send file", async () => {
@@ -129,7 +140,7 @@ export default class OpVaultPlugin extends Plugin {
 				this.settings.channelName,
 				activeFile,
 				this.app,
-        this.settings.senderId,
+				this.settings.senderId
 			);
 		});
 
@@ -157,15 +168,15 @@ export default class OpVaultPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-  updatePresence(count: number) {
-    if (!this.statusBarItem) return;
+	updatePresence(count: number) {
+		if (!this.statusBarItem) return;
 
-    if (count > 0) {
-      this.statusBarItem.setText(`🟢 Online: (${count})`);
-    } else {
-      this.statusBarItem.setText(`🔴 Offline`);
-    }
-  }
+		if (count > 0) {
+			this.statusBarItem.setText(`🟢 Online: (${count})`);
+		} else {
+			this.statusBarItem.setText(`🔴 Offline`);
+		}
+	}
 
 	onunload() {
 		console.info("[OPV] We're done here... Bye bye :)");
@@ -245,14 +256,14 @@ class vaultSettingsTab extends PluginSettingTab {
 						.setButtonText("Revoke")
 						.setWarning()
 						.onClick(async () => {
-              if (!this.plugin.activeTransport) {
-                new Notice("Not connected to server.");
-                console.info("[OPV] No active transport found.");
-                return;
-              }
-              new Notice(`Revoking share for ${item.path}...`);
-              console.info(`[OPV] Revoking share for ${item.path}...`);
-              await remove(this.plugin.activeTransport, item.id);
+							if (!this.plugin.activeTransport) {
+								new Notice("Not connected to server.");
+								console.info("[OPV] No active transport found.");
+								return;
+							}
+							new Notice(`Revoking share for ${item.path}...`);
+							console.info(`[OPV] Revoking share for ${item.path}...`);
+							await remove(this.plugin.activeTransport, item.id);
 							this.plugin.settings.sharedItems.splice(index, 1);
 							await this.plugin.saveSettings();
 							this.display();
@@ -267,7 +278,7 @@ export class ShareModal extends Modal {
 	plugin: OpVaultPlugin;
 	file: TFile;
 	pin: string = "";
-  upload: boolean = false;
+	upload: boolean = false;
 
 	constructor(app: App, plugin: OpVaultPlugin, file: TFile) {
 		super(app);
@@ -288,12 +299,10 @@ export class ShareModal extends Modal {
 				})
 			);
 
-    new Setting(contentEl)
-      .setName("Upload to cloud")
-      .setDesc("Store offline and offsite.")
-      .addToggle((toggle) =>
-                toggle.onChange((v) => (this.upload = v))
-    );
+		new Setting(contentEl)
+			.setName("Upload to cloud")
+			.setDesc("Store offline and offsite.")
+			.addToggle((toggle) => toggle.onChange((v) => (this.upload = v)));
 
 		new Setting(contentEl).addButton((btn) => {
 			btn
@@ -308,7 +317,7 @@ export class ShareModal extends Modal {
 
 	async createShare() {
 		const shareId = generateUUID();
-    const newShare: SharedItem = {
+		const newShare: SharedItem = {
 			id: shareId,
 			path: this.file.path,
 			pin: this.pin ? this.pin : undefined,
@@ -317,14 +326,14 @@ export class ShareModal extends Modal {
 			shares: 0,
 		};
 
-    if (this.upload) {
-      if (!this.plugin.activeTransport) {
-        new Notice("Not connected to server.");
-        console.info("[OPV] No active transport found.");
-        return;
-      }
-      await upload(this, shareId, newShare.pin);
-    }
+		if (this.upload) {
+			if (!this.plugin.activeTransport) {
+				new Notice("Not connected to server.");
+				console.info("[OPV] No active transport found.");
+				return;
+			}
+			await upload(this, shareId, newShare.pin);
+		}
 
 		this.plugin.settings.sharedItems.push(newShare);
 		await this.plugin.saveSettings();
@@ -392,15 +401,15 @@ export class DownloadModal extends Modal {
 		new Notice(`Starting download for Share ID: ${this.shareId}`);
 		console.info(`[OPV] Starting download for Share ID: ${this.shareId}`);
 
-    if (!this.plugin.activeTransport) {
-      new Notice("Not connected to server.");
-      console.info("[OPV] No active transport found.");
-      return;
-    }
+		if (!this.plugin.activeTransport) {
+			new Notice("Not connected to server.");
+			console.info("[OPV] No active transport found.");
+			return;
+		}
 
-    await download(this.shareId, this.app, this.plugin, this.pin);
-   	
-    this.close();
+		await download(this.shareId, this.app, this.plugin, this.pin);
+
+		this.close();
 	}
 
 	onClose() {

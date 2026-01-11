@@ -20,7 +20,7 @@ export async function sendFileChunked(
 	channel: string,
 	file: TFile,
 	app: App,
-  senderId: string,
+	senderId: string
 ) {
 	const chunkSize = 64 * 1024; // 64KB
 

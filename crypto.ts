@@ -76,51 +76,57 @@ export async function decryptPacket(payload: string): Promise<any> {
 	}
 }
 
-export async function encryptBinary(data: ArrayBuffer, keyStr: string): Promise<Uint8Array> | null{
-  try {
-  const key = await getKey(keyStr);
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+export async function encryptBinary(
+	data: ArrayBuffer,
+	keyStr: string
+): Promise<Uint8Array> | null {
+	try {
+		const key = await getKey(keyStr);
+		const iv = window.crypto.getRandomValues(new Uint8Array(12));
 
-  const encrypted = await window.crypto.subtle.encrypt(
-    {
-      name: "AES-GCM",
-      iv: iv,
-    },
-    key,
-    data
-  );
+		const encrypted = await window.crypto.subtle.encrypt(
+			{
+				name: "AES-GCM",
+				iv: iv,
+			},
+			key,
+			data
+		);
 
-  const result = new Uint8Array(iv.byteLength + encrypted.byteLength);
-  result.set(iv, 0);
-  result.set(new Uint8Array(encrypted), iv.byteLength);
+		const result = new Uint8Array(iv.byteLength + encrypted.byteLength);
+		result.set(iv, 0);
+		result.set(new Uint8Array(encrypted), iv.byteLength);
 
-  return result;
-  } catch (e) {
-    console.error("[OPV] Binary encryption failed:", e);
-    return null;
-  }
+		return result;
+	} catch (e) {
+		console.error("[OPV] Binary encryption failed:", e);
+		return null;
+	}
 }
 
-export async function decryptBinary(data: Uint8Array, keyStr: string): Promise<Uint8Array> | null {
-  try {
-    const key = await getKey(keyStr);
-    const iv = data.slice(0, 12);
-    const encrypted = data.slice(12);
+export async function decryptBinary(
+	data: Uint8Array,
+	keyStr: string
+): Promise<Uint8Array> | null {
+	try {
+		const key = await getKey(keyStr);
+		const iv = data.slice(0, 12);
+		const encrypted = data.slice(12);
 
-    const decrypted = await window.crypto.subtle.decrypt(
-      {
-        name: "AES-GCM",
-        iv: iv,
-      },
-      key,
-      encrypted
-    );
+		const decrypted = await window.crypto.subtle.decrypt(
+			{
+				name: "AES-GCM",
+				iv: iv,
+			},
+			key,
+			encrypted
+		);
 
-    return new Uint8Array(decrypted);
-  } catch (e) {
-    console.error("[OPV] Binary decryption failed:", e);
-    return null;
-  }
+		return new Uint8Array(decrypted);
+	} catch (e) {
+		console.error("[OPV] Binary decryption failed:", e);
+		return null;
+	}
 }
 
 // Helpers

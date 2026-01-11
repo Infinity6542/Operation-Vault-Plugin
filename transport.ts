@@ -43,11 +43,11 @@ export async function connectToServer(
 	try {
 		const transport = new WebTransport(url, options);
 
-		console.info("Attempting a connection to " + url);
+		console.info("[OPV] Attempting a connection to " + url);
 		await transport.ready;
 
 		new Notice("Connected to the server.");
-		console.info("WebTransport connection successful.");
+		console.info("[OPV] WebTransport connection successful.");
 
 		const stream = await transport.createBidirectionalStream();
 		const writer = stream.writable.getWriter();
@@ -312,6 +312,7 @@ export async function upload(transport: any, file: TFile, app: App, shareId: str
     packageBuffer.set(new Uint8Array(fileData), 2 + nameBytes.length);
 
     const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
+    console.log(key);
     const encryptedData = await encryptBinary(packageBuffer.buffer, key);
 
     await writer.write(encryptedData);
@@ -361,6 +362,7 @@ export async function download(transport: any, shareId: string, app: App, plugin
     }
 
     const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
+    console.log(key);
     let decrypted = await decryptBinary(encrypted, key);
 
     if (!decrypted) {
@@ -381,5 +383,28 @@ export async function download(transport: any, shareId: string, app: App, plugin
   } catch (e) {
     console.error("[OPV] Error during file download", e);
     new Notice("Error during file download. Check console for more information.");
+  }
+}
+
+export async function remove(transport: any, shareId: string) {
+  if (!transport) return new Notice ("No active connection.");
+
+  try {
+    const encoder = new TextEncoder();
+    const stream = await transport.createBidirectionalStream();
+    const writer = stream.writable.getWriter();
+    // In the future, read the response to make sure that the operation
+    // was successful.
+    // const reader = stream.readable.getReader();
+    
+    const header = JSON.stringify({ type: "remove", payload: shareId}) + "\n";
+    await writer.write(encoder.encode(header));
+    await writer.close();
+
+    new Notice(`Delete request sent for item "${shareId}"`);
+    console.info(`[OPV] Delete request sent for item "${shareId}"`);
+  } catch (e) {
+    console.error("Error during delete request", e);
+    new Notice("Error during delete request. Check the console for more information.");
   }
 }

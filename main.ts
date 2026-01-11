@@ -7,7 +7,7 @@ import {
 	Setting,
 	TFile,
 } from "obsidian";
-import { connectToServer, sendSecureMessage, upload } from "./transport";
+import { connectToServer, sendSecureMessage, upload, download, remove } from "./transport";
 import { sendFileChunked } from "./fileHandler";
 
 export interface SharedItem {
@@ -67,6 +67,11 @@ export default class OpVaultPlugin extends Plugin {
 
       // activeWriter is defined when connectToServer is called
 			// this.activeWriter = await connectToServer(url, channel, this.app, this);
+      if (this.activeTransport) {
+        new Notice("Looks like you're already connected!");
+        console.error("[OPV] Already connected to server.");
+        return;
+      }
       this.activeTransport = await connectToServer(url, channel, this.app, this);
 		});
 
@@ -81,7 +86,7 @@ export default class OpVaultPlugin extends Plugin {
 				type: "chat",
 				content: "Helloooooo!",
 			});
-      new Notice("Send the message :)");
+      new Notice("Sent the message :)");
 		});
 
 		this.addRibbonIcon("paper-plane", "Send file", async () => {
@@ -208,6 +213,14 @@ class vaultSettingsTab extends PluginSettingTab {
 						.setButtonText("Revoke")
 						.setWarning()
 						.onClick(async () => {
+              if (!this.plugin.activeTransport) {
+                new Notice("Not connected to server.");
+                console.info("[OPV] No active transport found.");
+                return;
+              }
+              new Notice(`Revoking share for ${item.path}...`);
+              console.info(`[OPV] Revoking share for ${item.path}...`);
+              await remove(this.plugin.activeTransport, item.id);
 							this.plugin.settings.sharedItems.splice(index, 1);
 							await this.plugin.saveSettings();
 							this.display();
@@ -278,7 +291,7 @@ export class ShareModal extends Modal {
         console.info("[OPV] No active transport found.");
         return;
       }
-      await upload(this.plugin.activeTransport, this.file, this.app, shareId);
+      await upload(this.plugin.activeTransport, this.file, this.app, shareId, this.plugin, newShare.pin);
     }
 
 		this.plugin.settings.sharedItems.push(newShare);
@@ -347,17 +360,15 @@ export class DownloadModal extends Modal {
 		new Notice(`Starting download for Share ID: ${this.shareId}`);
 		console.info(`[OPV] Starting download for Share ID: ${this.shareId}`);
 
-		await sendSecureMessage(
-			this.plugin.activeWriter,
-			this.plugin.settings.channelName,
-			{
-				type: "download_request",
-				shareId: this.shareId,
-				pin: this.pin,
-			}
-		);
+    if (!this.plugin.activeTransport) {
+      new Notice("Not connected to server.");
+      console.info("[OPV] No active transport found.");
+      return;
+    }
 
-		this.close();
+    await download(this.plugin.activeTransport, this.shareId, this.app, this.plugin, this.pin);
+   	
+    this.close();
 	}
 
 	onClose() {

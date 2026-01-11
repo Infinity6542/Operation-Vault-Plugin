@@ -76,7 +76,8 @@ export async function decryptPacket(payload: string): Promise<any> {
 	}
 }
 
-export async function encryptBinary(data: ArrayBuffer, keyStr: string): Promise<Uint8Array> {
+export async function encryptBinary(data: ArrayBuffer, keyStr: string): Promise<Uint8Array> | null{
+  try {
   const key = await getKey(keyStr);
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
 
@@ -94,10 +95,15 @@ export async function encryptBinary(data: ArrayBuffer, keyStr: string): Promise<
   result.set(new Uint8Array(encrypted), iv.byteLength);
 
   return result;
+  } catch (e) {
+    console.error("[OPV] Binary encryption failed:", e);
+    return null;
+  }
 }
 
-export async function decryptBinary(data: Uint8Array, keyStr: string): Promise<Uint8Array> {
+export async function decryptBinary(data: Uint8Array, keyStr: string): Promise<Uint8Array> | null {
   try {
+    console.log(data);
     const key = await getKey(keyStr);
     const iv = data.slice(0, 12);
     const encrypted = data.slice(12);

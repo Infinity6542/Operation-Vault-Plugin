@@ -31,7 +31,7 @@ export async function connectToServer(
 	channelID: string,
 	app: App,
 	plugin: any
-) {
+): Promise<any> {
 	const devHash = "YXMEXpP8LEhSlktl8CyCWK48BpeqUMTLqDK0eziKncE=";
 	const options: any = {
 		serverCertificateHashes: [
@@ -60,8 +60,10 @@ export async function connectToServer(
 		await sendRawJSON(writer, joinPacket);
 		new Notice(`Joined the channel ${channelID}.`);
 
+    plugin.activeWriter = writer;
+
 		readLoop(reader, app, plugin, writer);
-		return writer;
+		return transport;
 	} catch (e) {
 		console.error("Something went wrong", e);
 		new Notice("something went wrong.");

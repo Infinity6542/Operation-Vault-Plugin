@@ -323,7 +323,7 @@ export class ShareModal extends Modal {
         console.info("[OPV] No active transport found.");
         return;
       }
-      await upload(this.file, this.app, shareId, this.plugin, newShare.pin);
+      await upload(this, shareId, newShare.pin);
     }
 
 		this.plugin.settings.sharedItems.push(newShare);

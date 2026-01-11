@@ -323,7 +323,10 @@ async function receiveFile(app: App, filename: string, content: string) {
 	}
 }
 
-export async function upload(file: TFile, app: App, shareId: string, plugin: any, pin?: string) {
+export async function upload (modal: any, shareId: string, pin?: string) {
+  const file = modal.file;
+  const app = modal.app;
+  const plugin = modal.plugin;
   const transport = plugin.activeTransport;
   if (!transport) return new Notice ("No active connection.");
 

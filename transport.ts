@@ -320,7 +320,8 @@ async function receiveFile(app: App, filename: string, content: string) {
 	}
 }
 
-export async function upload(transport: any, file: TFile, app: App, shareId: string, plugin: any, pin?: string) {
+export async function upload(file: TFile, app: App, shareId: string, plugin: any, pin?: string) {
+  const transport = plugin.activeTransport;
   if (!transport) return new Notice ("No active connection.");
 
   try {
@@ -360,7 +361,8 @@ export async function upload(transport: any, file: TFile, app: App, shareId: str
   }
 }
 
-export async function download(transport: any, shareId: string, app: App, plugin: any, pin?: string) {
+export async function download(shareId: string, app: App, plugin: any, pin?: string) {
+  const transport = plugin.activeTransport;
   if (!transport) return new Notice ("No active connection.");
 
   try {

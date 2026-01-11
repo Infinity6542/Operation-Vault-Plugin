@@ -3,10 +3,10 @@ const secret = "wow_really_cool_secret_444";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-async function getKey() {
+async function getKey(password: string) {
 	const keyMaterial = await window.crypto.subtle.importKey(
 		"raw",
-		encoder.encode(secret),
+		encoder.encode(password),
 		{ name: "PBKDF2" },
 		false,
 		["deriveKey"]
@@ -27,7 +27,7 @@ async function getKey() {
 }
 
 export async function encryptPacket(data: any): Promise<string> {
-	const key = await getKey();
+	const key = await getKey(secret);
 	const iv = window.crypto.getRandomValues(new Uint8Array(12));
 	const jsonStr = JSON.stringify(data);
 
@@ -51,7 +51,7 @@ export async function encryptPacket(data: any): Promise<string> {
 export async function decryptPacket(payload: string): Promise<any> {
 	try {
 		const pkg = JSON.parse(payload);
-		const key = await getKey();
+		const key = await getKey(secret);
 
 		if (!pkg.iv || !pkg.data) {
 			throw new Error("Invalid payload structure");

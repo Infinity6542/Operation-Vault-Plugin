@@ -139,28 +139,31 @@ async function readLoop(reader: any, app: App, plugin: any, writer: any) {
 				const chunk = buffer.slice(0, boundary).trim();
 				buffer = buffer.slice(boundary + 1);
 
-				if (chunk.length > 0) {
-					try {
-						const message = JSON.parse(chunk);
+				if (chunk.length === 0) {
+					boundary = buffer.indexOf("\n");
+					continue;
+				}
 
-            if (message.type === "user_list") {
-              try {
-                const users = JSON.parse(message.payload);
-                plugin.onlineUsers = users;
-                plugin.updatePresence(users.length);
-                console.info("[OPV] Current users in channel:", users);
-                new Notice(`Currently online: ${users.length}`)
-              } catch (e) {
-                console.error("[OPV] Error parsing user list", e);
-              }
-              boundary = buffer.indexOf("\n");
-              continue;
-            }
+				try {
+					const message = JSON.parse(chunk);
 
-						await handleIn(message, app, plugin, writer);
-					} catch (e) {
-						console.error("[OPV] Error parsing buffered chunk JSON", e);
+					if (message.type === "user_list") {
+						try {
+							const users = JSON.parse(message.payload);
+							plugin.onlineUsers = users;
+							plugin.updatePresence(users.length);
+							console.info("[OPV] Current users in channel:", users);
+							new Notice(`Currently online: ${users.length}`);
+						} catch (e) {
+							console.error("[OPV] Error parsing user list", e);
+						}
+						boundary = buffer.indexOf("\n");
+						continue;
 					}
+
+					await handleIn(message, app, plugin, writer);
+				} catch (e) {
+					console.error("[OPV] Error parsing buffered chunk JSON", e);
 				}
 				boundary = buffer.indexOf("\n");
 			}
@@ -198,16 +201,16 @@ async function handleIn(message: any, app: App, plugin: any, writer: any) {
 			);
 			break;
 		case "file_chunk":
-			if (decrypted.fileId && incomingFiles.has(decrypted.fileId)) {
-				const chunkBytes = conversion(decrypted.content);
-				incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
-				console.info(
-					`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
-				);
-			} else {
+			if (!decrypted.fileId || !incomingFiles.has(decrypted.fileId)) {
 				console.info("[OPV] file_chunk message with unknown fileId");
 				return;
 			}
+
+			const chunkBytes = conversion(decrypted.content);
+			incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
+			console.info(
+				`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
+			);
 			break;
 		case "file_end":
 			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId!)) {
@@ -264,7 +267,7 @@ async function handleIn(message: any, app: App, plugin: any, writer: any) {
 					plugin.settings.channelName,
 					fileToSend,
 					app,
-          plugin.settings.senderId,
+					plugin.settings.senderId
 				);
 				shareItem.shares++;
 				plugin.saveSettings();

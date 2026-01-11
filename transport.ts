@@ -31,10 +31,10 @@ const incomingFiles = new Map<string, Uint8Array[]>();
 export async function connectToServer(
 	url: string,
 	channelID: string,
-  senderId: string,
-	app: App,
 	plugin: any
 ): Promise<any> {
+  const senderId = plugin.settings.senderId;
+  const app = plugin.app;
 	const devHash = "YXMEXpP8LEhSlktl8CyCWK48BpeqUMTLqDK0eziKncE=";
 	const options: any = {
 		serverCertificateHashes: [

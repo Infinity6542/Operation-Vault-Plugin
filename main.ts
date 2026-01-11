@@ -93,7 +93,7 @@ export default class OpVaultPlugin extends Plugin {
         console.error("[OPV] Already connected to server.");
         return;
       }
-      this.activeTransport = await connectToServer(url, channel, this.settings.senderId, this.app, this);
+      this.activeTransport = await connectToServer(url, channel, this);
 		});
 
 		this.addRibbonIcon("text", "Chat", async () => {

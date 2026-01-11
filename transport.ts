@@ -5,6 +5,7 @@ import {
 	getHash,
 	arrayBufferToBase64,
   encryptBinary,
+  decryptBinary,
 } from "./crypto";
 import { nameFile, sendFileChunked } from "./fileHandler";
 
@@ -283,6 +284,7 @@ async function receiveFile(app: App, filename: string, content: string) {
 		new Notice("Error saving file.");
 	}
 }
+
 export async function upload(transport: any, file: TFile, app: App, shareId: string, plugin: any, pin?: string) {
   if (!transport) return new Notice ("No active connection.");
 
@@ -322,3 +324,62 @@ export async function upload(transport: any, file: TFile, app: App, shareId: str
   }
 }
 
+export async function download(transport: any, shareId: string, app: App, plugin: any, pin?: string) {
+  if (!transport) return new Notice ("No active connection.");
+
+  try {
+    new Notice(`Downloading item "${shareId}"`);
+
+    const stream = await transport.createBidirectionalStream();
+    const writer = stream.writable.getWriter();
+    const reader = stream.readable.getReader();
+
+    const header = JSON.stringify({ type: "download", payload: shareId}) + "\n";
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    await writer.write(encoder.encode(header));
+
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      size += value.length;
+    }
+
+    if (size === 0) {
+      new Notice("File is empty or is nonexistent.");
+      return;
+    }
+
+    const encrypted = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      encrypted.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const key = (pin && pin.length > 0) ? pin : plugin.settings.encryptionKey;
+    let decrypted = await decryptBinary(encrypted, key);
+
+    if (!decrypted) {
+      new Notice("Decryption failed. Possibly wrong PIN or key.");
+      return;
+    }
+
+    const nameLen = (decrypted[0]) | (decrypted[1] << 8);
+    const nameBytes = decrypted.slice(2, 2 + nameLen);
+    const name = decoder.decode(nameBytes);
+    decrypted = decrypted.slice(2 + nameLen);
+
+    if (decrypted.buffer instanceof ArrayBuffer) {
+      receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
+    } else {
+      new Notice("Decrypted data is invalid.");
+    }
+  } catch (e) {
+    console.error("[OPV] Error during file download", e);
+    new Notice("Error during file download. Check console for more information.");
+  }
+}

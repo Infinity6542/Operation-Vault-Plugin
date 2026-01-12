@@ -33,7 +33,7 @@ export async function sendFileChunked(
 		// ol' reliable
 		// new Notice(`Starting upload for ${file.name} (${totalBytes / 1024} KB).`);
 		const progress = new Notice(`Preparing ${file.name}...`, 300000);
-		console.info(
+		console.debug(
 			`[OPV] Beginning to send ${file.name} (${totalBytes}:${totalChunks}).`
 		);
 
@@ -65,7 +65,7 @@ export async function sendFileChunked(
 
 			// Update progress
 			const percentage = Math.floor((chunkIndex / totalChunks) * 100);
-			console.info(
+			console.debug(
 				`[OPV] Sending ${file.name} (${chunkIndex}/${totalChunks}) - ${percentage}%`
 			);
 
@@ -84,7 +84,7 @@ export async function sendFileChunked(
 			fileId: fileId,
 			filename: file.name,
 		});
-		console.info(`[OPV] Finished sending ${file.name}.`);
+		console.debug(`[OPV] Finished sending ${file.name}.`);
 
 		progress.setMessage(`File ${file.name} was sent.`);
 

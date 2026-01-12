@@ -50,13 +50,13 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	onlineUsers: string[] = [];
 
 	async onload() {
-		console.info("[OPV] Loading client...");
+		console.debug("[OPV] Loading client...");
 		await this.loadSettings();
 
 		if (!this.settings.senderId) {
 			this.settings.senderId = generateUUID();
 			await this.saveSettings();
-			console.info(`[OPV] Generated new sender ID: ${this.settings.senderId}`);
+			console.debug(`[OPV] Generated new sender ID: ${this.settings.senderId}`);
 		}
 
 		this.addSettingTab(new vaultSettingsTab(this.app, this));
@@ -91,7 +91,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.addRibbonIcon("text", "Chat", async () => {
 			if (!this.activeWriter) {
 				new Notice("Not connected to server.");
-				console.info("[OPV] No active writer found.");
+				console.debug("[OPV] No active writer found.");
 				return;
 			}
 			new Notice("Broadcasting message...");
@@ -110,14 +110,14 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.addRibbonIcon("paper-plane", "Send file", async () => {
 			if (!this.activeWriter) {
 				new Notice("Not connected to server.");
-				console.info("[OPV] No active writer found.");
+				console.debug("[OPV] No active writer found.");
 				return;
 			}
 
 			const activeFile = this.app.workspace.getActiveFile();
 			if (!activeFile) {
 				new Notice("Open a file to send it!");
-				console.info("[OPV] Active file is not a TFile.");
+				console.debug("[OPV] Active file is not a TFile.");
 				return;
 			}
 
@@ -134,7 +134,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			const activeFile = this.app.workspace.getActiveFile();
 			if (!activeFile) {
 				new Notice("Open a file to share it!");
-				console.info("[OPV] Active file is not a TFile.");
+				console.debug("[OPV] Active file is not a TFile.");
 				return;
 			}
 
@@ -169,7 +169,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	}
 
 	onunload() {
-		console.info("[OPV] We're done here... Bye bye :)");
+		console.debug("[OPV] We're done here... Bye bye :)");
 	}
 }
 
@@ -248,11 +248,11 @@ class vaultSettingsTab extends PluginSettingTab {
 						.onClick(async () => {
 							if (!this.plugin.activeTransport) {
 								new Notice("Not connected to server.");
-								console.info("[OPV] No active transport found.");
+								console.debug("[OPV] No active transport found.");
 								return;
 							}
 							new Notice(`Revoking share for ${item.path}...`);
-							console.info(`[OPV] Revoking share for ${item.path}...`);
+							console.debug(`[OPV] Revoking share for ${item.path}...`);
 							await remove(this.plugin.activeTransport, item.id);
 							this.plugin.settings.sharedItems.splice(index, 1);
 							await this.plugin.saveSettings();
@@ -319,7 +319,7 @@ export class ShareModal extends Modal {
 		if (this.upload) {
 			if (!this.plugin.activeTransport) {
 				new Notice("Not connected to server.");
-				console.info("[OPV] No active transport found.");
+				console.debug("[OPV] No active transport found.");
 				return;
 			}
 			await upload(this, shareId, newShare.pin);
@@ -389,11 +389,11 @@ export class DownloadModal extends Modal {
 		}
 
 		new Notice(`Starting download for Share ID: ${this.shareId}`);
-		console.info(`[OPV] Starting download for Share ID: ${this.shareId}`);
+		console.debug(`[OPV] Starting download for Share ID: ${this.shareId}`);
 
 		if (!this.plugin.activeTransport) {
 			new Notice("Not connected to server.");
-			console.info("[OPV] No active transport found.");
+			console.debug("[OPV] No active transport found.");
 			return;
 		}
 

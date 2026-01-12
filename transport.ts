@@ -35,11 +35,11 @@ export async function connectToServer(
 	try {
 		const transport = new WebTransport(url, options);
 
-		console.info("[OPV] Attempting a connection to " + url);
+		console.debug("[OPV] Attempting a connection to " + url);
 		await transport.ready;
 
 		new Notice("Connected to the server.");
-		console.info("[OPV] WebTransport connection successful.");
+		console.debug("[OPV] WebTransport connection successful.");
 
 		const stream = await transport.createBidirectionalStream();
 		const writer = stream.writable.getWriter() as WritableStreamDefaultWriter<Uint8Array>;
@@ -66,8 +66,8 @@ export async function connectToServer(
 					sender_id: plugin.settings.senderId,
 					payload: "ping",
 				};
-				console.info("[OPV] Sent heartbeat ping.");
 				void sendRawJSON(writer, packet);
+				console.debug("[OPV] Sent heartbeat ping.");
 			}
 		}, 10000);
 
@@ -127,7 +127,7 @@ async function readLoop(
 		while (true) {
 			const { value, done } = await reader.read();
 			if (done) {
-				console.info("[OPV] Stream closed.");
+				console.debug("[OPV] Stream closed.");
 				break;
 			}
 			buffer += decoder.decode(value, { stream: true });
@@ -150,7 +150,7 @@ async function readLoop(
 							const users = JSON.parse(message.payload) as string[];
 							plugin.onlineUsers = users;
 							plugin.updatePresence(users.length);
-							console.info("[OPV] Current users in channel:", users);
+							console.debug("[OPV] Current users in channel:", users);
 							new Notice(`Currently online: ${users.length}`);
 						} catch (e) {
 							console.error("[OPV] Error parsing user list", e);
@@ -194,30 +194,30 @@ async function handleIn(
 	switch (decrypted.type) {
 		case "chat":
 			new Notice(`From peer: ${decrypted.content}`);
-			console.info("[OPV] Chat message:", decrypted.content);
+			console.debug("[OPV] Chat message:", decrypted.content);
 			break;
 		case "file_start":
 			// Ignore missing fileId for now
 			incomingFiles.set(decrypted.fileId, []);
-			console.info(
+			console.debug(
 				`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
 			);
 			break;
 		case "file_chunk":
 			if (!decrypted.fileId || !incomingFiles.has(decrypted.fileId)) {
-				console.info("[OPV] file_chunk message with unknown fileId");
+				console.debug("[OPV] file_chunk message with unknown fileId");
 				return;
 			}
 
 			const chunkBytes = conversion(decrypted.content);
 			incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
-			console.info(
+			console.debug(
 				`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
 			);
 			break;
 		case "file_end":
-				console.info("[OPV] Unknown inner message type:", decrypted);
 			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId)) {
+				console.debug("[OPV] Unknown inner message type:", decrypted);
 				break;
 			}
 			const chunks = incomingFiles.get(decrypted.fileId)!;
@@ -239,9 +239,11 @@ async function handleIn(
 
 			await receiveFile(app, decrypted.filename || "unnamed", base64String);
 			incomingFiles.delete(decrypted.fileId);
+			console.debug(`[OPV] Received file: ${decrypted.fileId}`);
 			break;
 		case "download_request":
 			console.info(`[OPV] Download request for: ${decrypted.shareId}`);
+			console.debug(`[OPV] Download request for: ${decrypted.shareId}`);
 
 			const shareItem = plugin.settings.sharedItems.find(
 				(i: SharedItem) => i.id === decrypted.shareId
@@ -316,7 +318,7 @@ async function receiveFile(app: App, filename: string, content: string) {
 			new Notice(`File exists. Saving as ${finalName}`);
 		}
 
-		console.info(`[OPV] Saving as ${finalName}`);
+		console.debug(`[OPV] Saving as ${finalName}`);
 		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);
 		new Notice(`Saved file: ${finalName}.`);
 		return;
@@ -454,7 +456,7 @@ export async function remove(transport: WebTransport | null, shareId: string) {
 		await writer.close();
 
 		new Notice(`Delete request sent for item "${shareId}"`);
-		console.info(`[OPV] Delete request sent for item "${shareId}"`);
+		console.debug(`[OPV] Delete request sent for item "${shareId}"`);
 	} catch (e) {
 		console.error("Error during delete request", e);
 		new Notice(

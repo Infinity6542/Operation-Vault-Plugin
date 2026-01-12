@@ -2,18 +2,19 @@ import { Notice, App, TFile } from "obsidian";
 import {
 	encryptPacket,
 	decryptPacket,
-	getHash,
 	arrayBufferToBase64,
 	encryptBinary,
 	decryptBinary,
 } from "./crypto";
-import { nameFile, sendFileChunked } from "./fileHandler";
+import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {
 	IOpVaultPlugin,
 	SharedItem,
 	UploadModal,
-	innerMessage,
+	InnerMessage,
 	TransportPacket,
+  SyncMessage,
+  ManifestItem,
 } from "./types";
 
 const incomingFiles = new Map<string, Uint8Array[]>();
@@ -83,7 +84,7 @@ export async function sendSecureMessage(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channelId: string,
 	senderId: string,
-	innerData: innerMessage
+	innerData: InnerMessage
 ) {
 	const encryptedPayload = await encryptPacket(innerData);
 
@@ -101,6 +102,7 @@ async function sendRawJSON(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	data: TransportPacket | { type: string; channel_id: string; sender_id: string; payload: string }
 ) {
+  console.debug("[DBG] [OPV] Sending JSON:", JSON.stringify(data));
 	const encoder = new TextEncoder();
 	await writer.write(encoder.encode(JSON.stringify(data) + "\n"));
 }
@@ -279,53 +281,79 @@ async function handleIn(
 			}
 			break;
 		}
+    case "diffs": {
+      console.debug(`[OPV] Sync diffs for file: ${decrypted.fileId}`);
+
+      let remoteFiles: ManifestItem[] = [];
+      try {
+        remoteFiles = JSON.parse(decrypted.payload as string) as ManifestItem[];
+      } catch (e) {
+        console.error("[OPV] Error parsing sync diffs payload", e);
+        break;
+      }
+
+      const filesToRequest: string[] = [];
+      for (const remote of remoteFiles) {
+        const local = app.vault.getAbstractFileByPath(remote.path);
+        if (!local || (local instanceof TFile && local.stat.mtime < remote.mtime)) {
+          filesToRequest.push(remote.path);
+        }
+      }
+
+      if (filesToRequest.length > 0) {
+        const req: SyncMessage = {
+          type: "changes",
+          path: "request_batch",
+          payload: JSON.stringify(filesToRequest),
+        }
+        await sendSecureMessage(writer, plugin.settings.channelName, plugin.settings.senderId, req);
+      }
+      break;
+    }
+    case "changes": {
+      console.debug(`[OPV] Sync changes for file: ${decrypted.fileId}`);
+
+      let requestedIds: string[] = [];
+      try {
+        requestedIds = JSON.parse(decrypted.payload as string) as string[];
+      } catch (e) {
+        console.error("[OPV] Error parsing sync changes payload", e);
+        break;
+      }
+
+      for (const path of requestedIds) {
+        const file = app.vault.getAbstractFileByPath(path);
+
+        if (file instanceof TFile) {
+          const content = await app.vault.readBinary(file);
+          const updateMessage: SyncMessage = {
+            type: "update",
+            path: path,
+            payload: arrayBufferToBase64(content),
+          };
+          await sendSecureMessage(writer, plugin.settings.channelName, plugin.settings.senderId, updateMessage);
+        }
+      }
+      break;
+    }
+    case "update": {
+      console.debug(`[OPV] Sync update for file: ${decrypted.path}`);
+
+      const path = decrypted.path;
+      // const content = base64ToArrayBuffer(decrypted.payload);
+
+      await receiveFile(app, path, decrypted.payload as string, true);
+      break;
+    }
+    case "sync": {
+      if (decrypted.path && decrypted.syncPayload) {
+        console.debug(`[OPV] Sync message for file: ${decrypted.path}`);
+        await plugin.syncHandler.applyUpdate(decrypted.path, decrypted.syncPayload);
+      }
+      break;
+    }
 		default:
 			console.error("[OPV] Unknown message type:", decrypted.type);
-	}
-}
-
-function conversion(base64: string): Uint8Array {
-	const binaryString = atob(base64);
-	const len = binaryString.length;
-	const bytes = new Uint8Array(len);
-	for (let i = 0; i < len; i++) {
-		bytes[i] = binaryString.charCodeAt(i);
-	}
-	return bytes;
-}
-
-async function receiveFile(app: App, filename: string, content: string) {
-	try {
-		let finalName = filename;
-		const incomingBytes = conversion(content);
-		const incomingBuffer = incomingBytes.buffer;
-
-		const existing = app.vault.getAbstractFileByPath(finalName);
-		let duplicate = false;
-
-		if (existing instanceof TFile && incomingBuffer instanceof ArrayBuffer) {
-			const existingBuffer = await app.vault.readBinary(existing);
-
-			const existingHash = await getHash(existingBuffer);
-			const incomingHash = await getHash(incomingBuffer);
-
-			duplicate = existingHash === incomingHash;
-		}
-
-		if (existing) {
-			while (app.vault.getAbstractFileByPath(finalName)) {
-				finalName = nameFile(finalName, duplicate);
-			}
-			new Notice(`File exists. Saving as ${finalName}`);
-		}
-
-		console.debug(`[OPV] Saving as ${finalName}`);
-		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);
-		new Notice(`Saved file: ${finalName}.`);
-		return;
-	} catch (e) {
-		console.error("[OPV] Error while saving file", e);
-		new Notice("Error saving file.");
 	}
 }
 
@@ -419,7 +447,7 @@ export async function download(
 		let decrypted = await decryptBinary(encrypted, key);
 
 		if (!decrypted) {
-			new Notice("Decryption failed. Possibly wrong PIN or key.");
+			new Notice("Decryption failed. Possibly wrong pin or key.");
 			return;
 		}
 
@@ -464,4 +492,35 @@ export async function remove(transport: WebTransport | null, shareId: string) {
 			"Error during delete request. Check the console for more information."
 		);
 	}
+}
+
+export async function startSync(plugin: IOpVaultPlugin) {
+  if (!plugin.activeWriter) {
+    new Notice("No active connection for sync.");
+    return;
+  }
+
+  new Notice("Starting sync");
+  console.debug("[OPV] Starting sync");
+
+  console.debug("[OPV] Obtaining manifest")
+  const files = plugin.app.vault.getFiles();
+  const manifest: ManifestItem[] = files.map((f: TFile) => ({
+    path: f.path,
+    mtime: f.stat.mtime,
+    size: f.stat.size,
+  }));
+
+  await sendSecureMessage(
+    plugin.activeWriter,
+    plugin.settings.channelName,
+    plugin.settings.senderId,
+    {
+      type: "diffs",
+      path: "manifest",
+      payload: JSON.stringify(manifest),
+    }
+  );
+
+  console.debug(`[OPV] Manifest sent with ${manifest.length} items`);
 }

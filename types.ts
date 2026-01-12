@@ -1,13 +1,29 @@
-import { App, TFile } from "obsidian";
+import { App, TFile, EventRef } from "obsidian";
+import { SyncHandler } from "./syncHandler";
 
-export interface innerMessage {
-	type: "chat" | "file_start" | "file_chunk" | "file_end" | "download_request";
+export interface IOpVaultPlugin {
+	settings: PluginSettings;
+	app: App;
+	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null;
+	activeTransport: WebTransport | null;
+  syncHandler: SyncHandler;
+	onlineUsers: string[];
+	updatePresence(count: number): void;
+	saveSettings(): Promise<void>;
+
+  registerEvent(event: EventRef): void;
+}
+
+export interface InnerMessage {
+	type: "chat" | "file_start" | "file_chunk" | "file_end" | "download_request" | "diffs" | "changes" | "update" | "sync";
 	content?: string;
 	filename?: string;
 	fileId?: string;
 	chunkIndex?: number;
 	shareId?: string;
 	pin?: string;
+  path?: string;
+  syncPayload?: string;
 }
 
 export interface TransportPacket {
@@ -34,18 +50,21 @@ export interface PluginSettings {
 	sharedItems: SharedItem[];
 }
 
-export interface IOpVaultPlugin {
-	settings: PluginSettings;
-	app: App;
-	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null;
-	activeTransport: WebTransport | null;
-	onlineUsers: string[];
-	updatePresence(count: number): void;
-	saveSettings(): Promise<void>;
-}
-
 export interface UploadModal {
 	file: TFile;
 	app: App;
 	plugin: IOpVaultPlugin;
+}
+
+export interface SyncMessage {
+  type: "diffs" | "changes" | "update";
+  path: string;
+  payload: string;
+}
+
+export interface ManifestItem {
+  path: string;
+  mtime: number;
+  size?: number;
+  hash?: string;
 }

@@ -1,5 +1,6 @@
 import { App, TFile, Notice } from "obsidian";
 import { sendSecureMessage } from "./transport";
+import { getHash } from "./crypto";
 
 function arrayBufferTobase64(buffer: ArrayBuffer): string {
 	let binary = "";
@@ -130,4 +131,56 @@ export function nameFile(oName: string, duplicate?: boolean): string {
 	}
 
 	return finalName;
+}
+
+export async function receiveFile(app: App, filename: string, content: string, overwrite?: boolean) {
+	try {
+		let finalName = filename;
+		const incomingBytes = conversion(content);
+		const incomingBuffer = incomingBytes.buffer;
+
+		const existing = app.vault.getAbstractFileByPath(finalName);
+		let duplicate = false;
+
+    if (overwrite && existing instanceof TFile) {
+      console.debug(`[OPV] Overwriting existing file: ${finalName}`);
+      await app.vault.modifyBinary(existing, incomingBuffer as ArrayBuffer);
+      new Notice(`Overwritten file: ${finalName}.`);
+      return;
+    }
+
+		if (existing instanceof TFile && incomingBuffer instanceof ArrayBuffer) {
+			const existingBuffer = await app.vault.readBinary(existing);
+
+			const existingHash = await getHash(existingBuffer);
+			const incomingHash = await getHash(incomingBuffer);
+
+			duplicate = existingHash === incomingHash;
+		}
+
+		if (existing) {
+			while (app.vault.getAbstractFileByPath(finalName)) {
+				finalName = nameFile(finalName, duplicate);
+			}
+			new Notice(`File exists. Saving as ${finalName}`);
+		}
+
+		console.debug(`[OPV] Saving as ${finalName}`);
+		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);
+		new Notice(`Saved file: ${finalName}.`);
+		return;
+	} catch (e) {
+		console.error("[OPV] Error while saving file", e);
+		new Notice("Error saving file.");
+	}
+}
+
+export function conversion(base64: string): Uint8Array {
+	const binaryString = atob(base64);
+	const len = binaryString.length;
+	const bytes = new Uint8Array(len);
+	for (let i = 0; i < len; i++) {
+		bytes[i] = binaryString.charCodeAt(i);
+	}
+	return bytes;
 }

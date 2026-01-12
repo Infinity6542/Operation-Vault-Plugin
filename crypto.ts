@@ -1,4 +1,4 @@
-import type { innerMessage } from "./types";
+import type { InnerMessage } from "./types";
 
 const secret = "wow_really_cool_secret_444";
 
@@ -28,7 +28,7 @@ async function getKey(password: string) {
 	);
 }
 
-export async function encryptPacket(data: innerMessage): Promise<string> {
+export async function encryptPacket(data: InnerMessage): Promise<string> {
 	const key = await getKey(secret);
 	const iv = window.crypto.getRandomValues(new Uint8Array(12));
 	const jsonStr = JSON.stringify(data);
@@ -50,7 +50,7 @@ export async function encryptPacket(data: innerMessage): Promise<string> {
 	return JSON.stringify(packageData);
 }
 
-export async function decryptPacket(payload: string): Promise<innerMessage | null> {
+export async function decryptPacket(payload: string): Promise<InnerMessage | null> {
 	try {
 		const pkg = JSON.parse(payload) as { iv: string; data: string };
 		const key = await getKey(secret);
@@ -71,7 +71,7 @@ export async function decryptPacket(payload: string): Promise<innerMessage | nul
 		);
 
 		const decryptedStr = decoder.decode(decryptedBytes);
-		return JSON.parse(decryptedStr) as innerMessage;
+		return JSON.parse(decryptedStr) as InnerMessage;
 	} catch (e) {
 		console.error("[OPV] Decryption failed:", e);
 		return null;
@@ -141,7 +141,7 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 	return btoa(binary);
 }
 
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
 	const binaryString = atob(base64);
 	const bytes = new Uint8Array(binaryString.length);
 	for (let i = 0; i < binaryString.length; i++) {

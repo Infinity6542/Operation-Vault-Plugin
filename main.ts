@@ -13,8 +13,10 @@ import {
 	upload,
 	download,
 	remove,
+  startSync,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
+import { SyncHandler } from "./syncHandler";
 import type { SharedItem, PluginSettings, IOpVaultPlugin } from "./types";
 
 export type { SharedItem };
@@ -46,6 +48,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	settings: PluginSettings;
 	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
 	activeTransport: WebTransport | null = null;
+  syncHandler: SyncHandler;
 	statusBarItem: HTMLElement;
 	onlineUsers: string[] = [];
 
@@ -58,6 +61,8 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			await this.saveSettings();
 			console.debug(`[OPV] Generated new sender ID: ${this.settings.senderId}`);
 		}
+
+    this.syncHandler = new SyncHandler(this.app, this);
 
 		this.addSettingTab(new vaultSettingsTab(this.app, this));
 
@@ -144,6 +149,10 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.addRibbonIcon("download", "Download shared item", async () => {
 			new DownloadModal(this.app, this).open();
 		});
+
+    this.addRibbonIcon("refresh-cw", "Sync file", async () => {
+      await startSync(this);
+    });
 	}
 
 	async loadSettings() {

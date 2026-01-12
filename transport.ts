@@ -203,7 +203,7 @@ async function handleIn(
 				`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
 			);
 			break;
-		case "file_chunk":
+		case "file_chunk": {
 			if (!decrypted.fileId || !incomingFiles.has(decrypted.fileId)) {
 				console.debug("[OPV] file_chunk message with unknown fileId");
 				return;
@@ -215,7 +215,8 @@ async function handleIn(
 				`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
 			);
 			break;
-		case "file_end":
+		}
+		case "file_end": {
 			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId)) {
 				console.debug("[OPV] Unknown inner message type:", decrypted);
 				break;
@@ -241,7 +242,8 @@ async function handleIn(
 			incomingFiles.delete(decrypted.fileId);
 			console.debug(`[OPV] Received file: ${decrypted.fileId}`);
 			break;
-		case "download_request":
+		}
+		case "download_request": {
 			console.debug(`[OPV] Download request for: ${decrypted.shareId}`);
 
 			const shareItem = plugin.settings.sharedItems.find(
@@ -277,6 +279,7 @@ async function handleIn(
 				void plugin.saveSettings();
 			}
 			break;
+		}
 		default:
 			console.error("[OPV] Unknown message type:", decrypted.type);
 	}

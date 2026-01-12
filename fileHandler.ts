@@ -16,7 +16,7 @@ function generateFileId(): string {
 }
 
 export async function sendFileChunked(
-	writer: any,
+	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channel: string,
 	file: TFile,
 	app: App,
@@ -93,7 +93,8 @@ export async function sendFileChunked(
 		}, 3000);
 	} catch (e) {
 		console.error("[OPV] Error sending file in chunks:", e);
-		new Notice(`Error while sending file: ${e.message}`);
+		const message = e instanceof Error ? e.message : String(e);
+		new Notice(`Error while sending file: ${message}`);
 	}
 }
 

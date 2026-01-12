@@ -1,3 +1,5 @@
+import type { innerMessage } from "./types";
+
 const secret = "wow_really_cool_secret_444";
 
 const encoder = new TextEncoder();
@@ -26,7 +28,7 @@ async function getKey(password: string) {
 	);
 }
 
-export async function encryptPacket(data: any): Promise<string> {
+export async function encryptPacket(data: innerMessage): Promise<string> {
 	const key = await getKey(secret);
 	const iv = window.crypto.getRandomValues(new Uint8Array(12));
 	const jsonStr = JSON.stringify(data);
@@ -48,9 +50,9 @@ export async function encryptPacket(data: any): Promise<string> {
 	return JSON.stringify(packageData);
 }
 
-export async function decryptPacket(payload: string): Promise<any> {
+export async function decryptPacket(payload: string): Promise<innerMessage | null> {
 	try {
-		const pkg = JSON.parse(payload);
+		const pkg = JSON.parse(payload) as { iv: string; data: string };
 		const key = await getKey(secret);
 
 		if (!pkg.iv || !pkg.data) {
@@ -69,7 +71,7 @@ export async function decryptPacket(payload: string): Promise<any> {
 		);
 
 		const decryptedStr = decoder.decode(decryptedBytes);
-		return JSON.parse(decryptedStr);
+		return JSON.parse(decryptedStr) as innerMessage;
 	} catch (e) {
 		console.error("[OPV] Decryption failed:", e);
 		return null;

@@ -8,37 +8,27 @@ import {
 	decryptBinary,
 } from "./crypto";
 import { nameFile, sendFileChunked } from "./fileHandler";
-
-interface innerMessage {
-	type: "chat" | "file_start" | "file_chunk" | "file_end" | "download_request";
-	content?: string;
-	filename?: string;
-	fileId?: string;
-	chunkIndex?: number;
-	shareId?: string;
-	pin?: string;
-}
-
-interface TransportPacket {
-	type: "join" | "message";
-	channel_id: string;
-	sender_id: string;
-	payload: string; // Encrypted
-}
+import type {
+	IOpVaultPlugin,
+	SharedItem,
+	UploadModal,
+	innerMessage,
+	TransportPacket,
+} from "./types";
 
 const incomingFiles = new Map<string, Uint8Array[]>();
 
 export async function connectToServer(
 	url: string,
 	channelID: string,
-	plugin: any
-): Promise<any> {
+	plugin: IOpVaultPlugin
+): Promise<WebTransport | null> {
 	const senderId = plugin.settings.senderId;
 	const app = plugin.app;
 	const devHash = "YXMEXpP8LEhSlktl8CyCWK48BpeqUMTLqDK0eziKncE=";
-	const options: any = {
+	const options: WebTransportOptions = {
 		serverCertificateHashes: [
-			{ algorithm: "sha-256", value: conversion(devHash) },
+			{ algorithm: "sha-256", value: conversion(devHash).buffer as ArrayBuffer },
 		],
 	};
 
@@ -52,8 +42,8 @@ export async function connectToServer(
 		console.info("[OPV] WebTransport connection successful.");
 
 		const stream = await transport.createBidirectionalStream();
-		const writer = stream.writable.getWriter();
-		const reader = stream.readable.getReader();
+		const writer = stream.writable.getWriter() as WritableStreamDefaultWriter<Uint8Array>;
+		const reader = stream.readable.getReader() as ReadableStreamDefaultReader<Uint8Array>;
 
 		const joinPacket: TransportPacket = {
 			type: "join",
@@ -66,9 +56,9 @@ export async function connectToServer(
 
 		plugin.activeWriter = writer;
 
-		readLoop(reader, app, plugin, writer);
+		void readLoop(reader, app, plugin, writer);
 
-		setInterval(async () => {
+		setInterval(() => {
 			if (writer) {
 				const packet = {
 					type: "heartbeat",
@@ -76,8 +66,8 @@ export async function connectToServer(
 					sender_id: plugin.settings.senderId,
 					payload: "ping",
 				};
-				await sendRawJSON(writer, packet);
 				console.info("[OPV] Sent heartbeat ping.");
+				void sendRawJSON(writer, packet);
 			}
 		}, 10000);
 
@@ -90,7 +80,7 @@ export async function connectToServer(
 }
 
 export async function sendSecureMessage(
-	writer: any,
+	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channelId: string,
 	senderId: string,
 	innerData: innerMessage
@@ -107,7 +97,10 @@ export async function sendSecureMessage(
 	await sendRawJSON(writer, packet);
 }
 
-async function sendRawJSON(writer: any, data: any) {
+async function sendRawJSON(
+	writer: WritableStreamDefaultWriter<Uint8Array>,
+	data: TransportPacket | { type: string; channel_id: string; sender_id: string; payload: string }
+) {
 	const encoder = new TextEncoder();
 	await writer.write(encoder.encode(JSON.stringify(data) + "\n"));
 }
@@ -122,7 +115,12 @@ async function sendRawJSON(writer: any, data: any) {
 
 // key: string
 // is not currently used and has been removed
-async function readLoop(reader: any, app: App, plugin: any, writer: any) {
+async function readLoop(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	app: App,
+	plugin: IOpVaultPlugin,
+	writer: WritableStreamDefaultWriter<Uint8Array>
+) {
 	const decoder = new TextDecoder();
 	let buffer = "";
 	try {
@@ -145,11 +143,11 @@ async function readLoop(reader: any, app: App, plugin: any, writer: any) {
 				}
 
 				try {
-					const message = JSON.parse(chunk);
+					const message = JSON.parse(chunk) as TransportPacket;
 
 					if (message.type === "user_list") {
 						try {
-							const users = JSON.parse(message.payload);
+							const users = JSON.parse(message.payload) as string[];
 							plugin.onlineUsers = users;
 							plugin.updatePresence(users.length);
 							console.info("[OPV] Current users in channel:", users);
@@ -176,7 +174,12 @@ async function readLoop(reader: any, app: App, plugin: any, writer: any) {
 	}
 }
 
-async function handleIn(message: any, app: App, plugin: any, writer: any) {
+async function handleIn(
+	message: TransportPacket,
+	app: App,
+	plugin: IOpVaultPlugin,
+	writer: WritableStreamDefaultWriter<Uint8Array>
+) {
 	if (message.type !== "message" || !message.payload) {
 		console.error("[OPV] Invalid message", message);
 		return;
@@ -213,11 +216,12 @@ async function handleIn(message: any, app: App, plugin: any, writer: any) {
 			);
 			break;
 		case "file_end":
-			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId!)) {
 				console.info("[OPV] Unknown inner message type:", decrypted);
+			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId)) {
 				break;
 			}
 			const chunks = incomingFiles.get(decrypted.fileId)!;
+			const chunks = incomingFiles.get(decrypted.fileId);
 
 			if (!chunks) {
 				break;
@@ -235,13 +239,12 @@ async function handleIn(message: any, app: App, plugin: any, writer: any) {
 
 			await receiveFile(app, decrypted.filename || "unnamed", base64String);
 			incomingFiles.delete(decrypted.fileId);
-			console.info(`[OPV] Received file: ${decrypted.fileId}`);
 			break;
 		case "download_request":
 			console.info(`[OPV] Download request for: ${decrypted.shareId}`);
 
 			const shareItem = plugin.settings.sharedItems.find(
-				(i: any) => i.id === decrypted.shareId
+				(i: SharedItem) => i.id === decrypted.shareId
 			);
 
 			if (!shareItem) {
@@ -270,7 +273,7 @@ async function handleIn(message: any, app: App, plugin: any, writer: any) {
 					plugin.settings.senderId
 				);
 				shareItem.shares++;
-				plugin.saveSettings();
+				void plugin.saveSettings();
 			}
 			break;
 		default:
@@ -323,7 +326,7 @@ async function receiveFile(app: App, filename: string, content: string) {
 	}
 }
 
-export async function upload(modal: any, shareId: string, pin?: string) {
+export async function upload(modal: UploadModal, shareId: string, pin?: string) {
 	const file = modal.file;
 	const app = modal.app;
 	const plugin = modal.plugin;
@@ -369,7 +372,7 @@ export async function upload(modal: any, shareId: string, pin?: string) {
 export async function download(
 	shareId: string,
 	app: App,
-	plugin: any,
+	plugin: IOpVaultPlugin,
 	pin?: string
 ) {
 	const transport = plugin.activeTransport;
@@ -380,7 +383,7 @@ export async function download(
 
 		const stream = await transport.createBidirectionalStream();
 		const writer = stream.writable.getWriter();
-		const reader = stream.readable.getReader();
+		const reader = stream.readable.getReader() as ReadableStreamDefaultReader<Uint8Array>;
 
 		const header =
 			JSON.stringify({ type: "download", payload: shareId }) + "\n";
@@ -423,7 +426,7 @@ export async function download(
 		decrypted = decrypted.slice(2 + nameLen);
 
 		if (decrypted.buffer instanceof ArrayBuffer) {
-			receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
+			await receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
 		} else {
 			new Notice("Decrypted data is invalid.");
 		}
@@ -435,7 +438,7 @@ export async function download(
 	}
 }
 
-export async function remove(transport: any, shareId: string) {
+export async function remove(transport: WebTransport | null, shareId: string) {
 	if (!transport) return new Notice("No active connection.");
 
 	try {

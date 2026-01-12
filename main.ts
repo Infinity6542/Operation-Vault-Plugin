@@ -15,25 +15,11 @@ import {
 	remove,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
+import type { SharedItem, PluginSettings, IOpVaultPlugin } from "./types";
 
-export interface SharedItem {
-	id: string;
-	path: string;
-	pin?: string;
-	key: string;
-	createdAt: number;
-	shares: number;
-}
+export type { SharedItem };
 
-interface settings {
-	serverUrl: string;
-	channelName: string;
-	encryptionKey: string;
-	senderId: string;
-	sharedItems: SharedItem[];
-}
-
-const defaultSettings: settings = {
+const defaultSettings: PluginSettings = {
 	serverUrl: "https://127.0.0.1:8080/ws",
 	channelName: "vault-1",
 	encryptionKey: "wow-really-cool-secret-444",
@@ -56,10 +42,10 @@ function generateKey(): string {
 	);
 }
 
-export default class OpVaultPlugin extends Plugin {
-	settings: settings;
-	activeWriter: any = null;
-	activeTransport: any = null;
+export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
+	settings: PluginSettings;
+	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+	activeTransport: WebTransport | null = null;
 	statusBarItem: HTMLElement;
 	onlineUsers: string[] = [];
 
@@ -161,7 +147,11 @@ export default class OpVaultPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, defaultSettings, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			defaultSettings,
+			(await this.loadData()) as PluginSettings
+		);
 	}
 
 	async saveSettings() {
@@ -195,7 +185,7 @@ class vaultSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Settings" });
+		new Setting(containerEl).setName("Configuration").setHeading();
 
 		new Setting(containerEl)
 			.setName("Server URL")
@@ -224,7 +214,7 @@ class vaultSettingsTab extends PluginSettingTab {
 			);
 
 		containerEl.createEl("hr");
-		containerEl.createEl("h3", { text: "Shared Items" });
+		new Setting(containerEl).setName("Shared items").setHeading();
 
 		const shareList = containerEl.createEl("div");
 
@@ -245,8 +235,8 @@ class vaultSettingsTab extends PluginSettingTab {
 					btn
 						.setIcon("link")
 						.setTooltip("Copy Share ID")
-						.onClick(() => {
-							navigator.clipboard.writeText(item.id);
+						.onClick(async () => {
+							await navigator.clipboard.writeText(item.id);
 							new Notice("Share ID copied to clipboard.");
 						})
 				);

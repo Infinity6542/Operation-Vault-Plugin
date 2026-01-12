@@ -299,7 +299,7 @@ export class ShareModal extends Modal {
 				.setButtonText("Create Share")
 				.setCta()
 				.onClick(async () => {
-					this.createShare();
+					await this.createShare();
 					this.close();
 				});
 		});
@@ -375,7 +375,7 @@ export class DownloadModal extends Modal {
 				.setButtonText("Download")
 				.setCta()
 				.onClick(async () => {
-					this.startDownload();
+					await this.startDownload();
 					this.close();
 				});
 		});

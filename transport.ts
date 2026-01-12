@@ -221,7 +221,6 @@ async function handleIn(
 				console.debug("[OPV] Unknown inner message type:", decrypted);
 				break;
 			}
-			const chunks = incomingFiles.get(decrypted.fileId)!;
 			const chunks = incomingFiles.get(decrypted.fileId);
 
 			if (!chunks) {

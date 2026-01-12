@@ -242,7 +242,6 @@ async function handleIn(
 			console.debug(`[OPV] Received file: ${decrypted.fileId}`);
 			break;
 		case "download_request":
-			console.info(`[OPV] Download request for: ${decrypted.shareId}`);
 			console.debug(`[OPV] Download request for: ${decrypted.shareId}`);
 
 			const shareItem = plugin.settings.sharedItems.find(

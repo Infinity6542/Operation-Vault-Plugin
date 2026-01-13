@@ -153,6 +153,23 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
     this.addRibbonIcon("refresh-cw", "Sync file", async () => {
       await startSync(this);
     });
+
+    this.registerEvent(
+      this.app.workspace.on("file-open", async (file) => {
+        if (!file) return;
+
+        const shared = this.settings.sharedItems.some(
+          (item) => item.path === file.path
+        );
+
+        if (shared) {
+          console.debug(`[OPV] File opened is shared: ${file.path}`);
+          await this.syncHandler.startSync(file);
+        } else {
+          console.debug(`[OPV] File opened is not shared: ${file.path}`);
+        }
+      })
+    );
 	}
 
 	async loadSettings() {

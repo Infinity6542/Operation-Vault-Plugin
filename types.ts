@@ -10,12 +10,11 @@ export interface IOpVaultPlugin {
 	onlineUsers: string[];
 	updatePresence(count: number): void;
 	saveSettings(): Promise<void>;
-
   registerEvent(event: EventRef): void;
 }
 
 export interface InnerMessage {
-	type: "chat" | "file_start" | "file_chunk" | "file_end" | "download_request" | "diffs" | "changes" | "update" | "sync";
+	type: "chat" | "file_start" | "file_chunk" | "file_end" | "download_request" | "diffs" | "changes" | "update" | "sync_vector" | "sync_snapshot" | "sync_update" | "awareness";
 	content?: string;
 	filename?: string;
 	fileId?: string;
@@ -24,6 +23,7 @@ export interface InnerMessage {
 	pin?: string;
   path?: string;
   syncPayload?: string;
+  awarenessPayload?: string;
 }
 
 export interface TransportPacket {

@@ -257,7 +257,6 @@ async function handleIn(
 				);
 				break;
 			}
-
 			if (shareItem.pin && shareItem.pin !== decrypted.pin) {
 				console.error(
 					`[OPV] Invalid PIN for shared item ID: ${decrypted.shareId}`
@@ -286,7 +285,7 @@ async function handleIn(
 
       let remoteFiles: ManifestItem[] = [];
       try {
-        remoteFiles = JSON.parse(decrypted.payload as string) as ManifestItem[];
+        remoteFiles = JSON.parse(decrypted.content) as ManifestItem[];
       } catch (e) {
         console.error("[OPV] Error parsing sync diffs payload", e);
         break;
@@ -315,7 +314,7 @@ async function handleIn(
 
       let requestedIds: string[] = [];
       try {
-        requestedIds = JSON.parse(decrypted.payload as string) as string[];
+        requestedIds = JSON.parse(decrypted.content) as string[];
       } catch (e) {
         console.error("[OPV] Error parsing sync changes payload", e);
         break;
@@ -340,15 +339,27 @@ async function handleIn(
       console.debug(`[OPV] Sync update for file: ${decrypted.path}`);
 
       const path = decrypted.path;
-      // const content = base64ToArrayBuffer(decrypted.payload);
+      // const content = base64ToArrayBuffer(decrypted.content);
 
-      await receiveFile(app, path, decrypted.payload as string, true);
+      await receiveFile(app, path, decrypted.content, true);
       break;
     }
-    case "sync": {
+    case "sync_vector":
+    case "sync_snapshot":
+    case "sync_update": {
       if (decrypted.path && decrypted.syncPayload) {
-        console.debug(`[OPV] Sync message for file: ${decrypted.path}`);
-        await plugin.syncHandler.applyUpdate(decrypted.path, decrypted.syncPayload);
+        await plugin.syncHandler.handleSyncMessage(decrypted.type, decrypted.path, decrypted.syncPayload);
+      }
+      break;
+    }
+    case "awareness": {
+      if (decrypted.path && decrypted.awarenessPayload) {
+        plugin.syncHandler.handleAwarenessUpdate(
+          decrypted.path,
+          decrypted.awarenessPayload,
+        );
+      } else {
+        console.error("[OPV] Invalid awareness message:", decrypted);
       }
       break;
     }
@@ -455,7 +466,7 @@ export async function download(
 		const nameBytes = decrypted.slice(2, 2 + nameLen);
 		const name = decoder.decode(nameBytes);
 		decrypted = decrypted.slice(2 + nameLen);
-
+;window
 		if (decrypted.buffer instanceof ArrayBuffer) {
 			await receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
 		} else {
@@ -510,7 +521,6 @@ export async function startSync(plugin: IOpVaultPlugin) {
     mtime: f.stat.mtime,
     size: f.stat.size,
   }));
-
   await sendSecureMessage(
     plugin.activeWriter,
     plugin.settings.channelName,
@@ -518,7 +528,7 @@ export async function startSync(plugin: IOpVaultPlugin) {
     {
       type: "diffs",
       path: "manifest",
-      payload: JSON.stringify(manifest),
+      content: JSON.stringify(manifest),
     }
   );
 

@@ -187,23 +187,28 @@ async function handleIn(
 		console.error("[OPV] Invalid message", message);
 		return;
 	}
+  let context: string = "";
   let key: string = "";
   if (message.channel_id === plugin.settings.channelName) {
     key = plugin.settings.encryptionKey;
+    context = "global";
   } else {
     const sharedItem = plugin.settings.sharedItems.find(i => i.id === message.channel_id);
     if (sharedItem) {
       key = sharedItem.pin || sharedItem.pin;
+      context = `sent`
     } else {
       // No key found
       console.debug(`[OPV] No key could be found for item ${message.channel_id}`);
+      key = "";
+      // return;
     }
   }
 
 	const decrypted = await decryptPacket(message.payload, key);
-
 	if (!decrypted) {
 		console.error("[OPV] Empty decrypted content", decrypted);
+    console.debug(context);
 		return;
 	}
 
@@ -284,15 +289,14 @@ async function handleIn(
 			if (fileToSend instanceof TFile) {
 				new Notice(`Sending shared file: ${fileToSend.basename}`);
 
-        const transferKey = plugin.settings.encryptionKey;
-
+        // const transferKey = plugin.settings.encryptionKey;
 				await sendFileChunked(
 					writer,
-					plugin.settings.channelName,
+          shareItem.id,
 					fileToSend,
 					app,
 					plugin.settings.senderId,
-          transferKey
+          shareItem.pin || ""
 				);
 				shareItem.shares++;
 				void plugin.saveSettings();
@@ -443,16 +447,18 @@ export async function requestFile(
   console.debug(`[OPV] Requesting file with share ID: ${shareId}`);
   new Notice(`Requesting file...`);
 
+  await joinChannel(plugin.activeWriter, shareId, plugin.settings.senderId);
+
   await sendSecureMessage(
     plugin.activeWriter,
-    plugin.settings.channelName,
+    shareId,
     plugin.settings.senderId,
     {
       type: "download_request",
       shareId: shareId,
       pin: pin || "",
     },
-    plugin.settings.encryptionKey
+    pin || ""
   )
 }
 
@@ -512,4 +518,15 @@ export async function startSync(plugin: IOpVaultPlugin, pin?: string) {
   );
 
   console.debug(`[OPV] Manifest sent with ${manifest.length} items`);
+}
+
+export async function joinChannel(writer: WritableStreamDefaultWriter<Uint8Array>, channelId: string, senderId: string) {
+  const packet: TransportPacket = {
+    type: "join",
+    channel_id: channelId,
+    sender_id: senderId,
+    payload: "Transfer room :D",
+  }
+  await sendRawJSON(writer, packet);
+  console.debug(`[OPV] Joined transfer channel ${channelId}`);
 }

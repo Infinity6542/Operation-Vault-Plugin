@@ -9,11 +9,10 @@ import {
 } from "obsidian";
 import {
 	connectToServer,
-	sendSecureMessage,
 	upload,
 	requestFile,
 	remove,
-  startSync,
+  joinChannel,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
@@ -48,6 +47,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	settings: PluginSettings;
 	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
 	activeTransport: WebTransport | null = null;
+  activeDownloads: Map<string, string> = new Map();
   syncHandler: SyncHandler;
 	statusBarItem: HTMLElement;
 	onlineUsers: string[] = [];
@@ -143,6 +143,17 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
     }
     try {
       this.activeTransport = await connectToServer(this.settings.serverUrl, this.settings.channelName, this);
+
+      if (this.activeWriter) {
+        console.debug("[OPV] Rejoining share channels.");
+        for (const item of this.settings.sharedItems) {
+          await joinChannel(
+            this.activeWriter,
+            item.id,
+            this.settings.senderId,
+          );
+        }
+      }
     } catch (e) {
       console.error("[OPV] Connection to server failed:", e);
       this.activeTransport = null;
@@ -166,7 +177,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		if (!this.statusBarItem) return;
 
 		if (count > 0) {
-			this.statusBarItem.setText(`🟢 Online: (${count})`);
+			this.statusBarItem.setText(`🟢 Online: ${count}`);
 		} else {
 			this.statusBarItem.setText(`🔴 Offline`);
 		}
@@ -293,10 +304,11 @@ export class ShareModal extends Modal {
 				})
 			);
 
-		new Setting(contentEl)
-			.setName("Upload to cloud")
-			.setDesc("Store offline and offsite.")
-			.addToggle((toggle) => toggle.onChange((v) => (this.upload = v)));
+		// new Setting(contentEl)
+		// 	.setName("Upload to cloud")
+		// 	.setDesc("Store offline and offsite.")
+		// 	.addToggle((toggle) => toggle.onChange((v) => (this.upload = v)));
+    this.upload = true;
 
 		new Setting(contentEl).addButton((btn) => {
 			btn
@@ -321,17 +333,25 @@ export class ShareModal extends Modal {
 			shares: 0,
 		};
 
+    if (!this.plugin.activeTransport) {
+      new Notice("Not connected to server.");
+      console.debug("[OPV] No active transport found.");
+      return;
+    }
+
 		if (this.upload) {
-			if (!this.plugin.activeTransport) {
-				new Notice("Not connected to server.");
-				console.debug("[OPV] No active transport found.");
-				return;
-			}
 			await upload(this, shareId, newShare.key);
 		}
 
 		this.plugin.settings.sharedItems.push(newShare);
 		await this.plugin.saveSettings();
+    await joinChannel(
+      this.plugin.activeWriter,
+      newShare.id,
+      this.plugin.settings.senderId,
+    );
+
+    console.debug(`joined channel ${newShare.id} after sharing`);
 
     await navigator.clipboard.writeText(shareId);
     if (this.pin) {
@@ -402,6 +422,7 @@ export class DownloadModal extends Modal {
 		new Notice(`Starting download for Share ID: ${this.shareId}`);
 		console.debug(`[OPV] Starting download for Share ID: ${this.shareId}`);
 
+    this.plugin.activeDownloads.set(this.shareId, this.pin);
     await requestFile(this.shareId, this.plugin, this.pin);
 
 		this.close();

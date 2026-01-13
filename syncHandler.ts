@@ -81,7 +81,8 @@ export class SyncHandler {
   }
 
   getStatePath(file: TFile): string {
-    return normalizePath(`${file.path}.yjs`);
+    console.debug(file);
+    return normalizePath(`.${file.path}.yjs`);
   }
 
   triggerSaveState(file: TFile, doc: Y.Doc) {

@@ -137,7 +137,7 @@ export function nameFile(oName: string, duplicate?: boolean): string {
 	return finalName;
 }
 
-export async function receiveFile(app: App, filename: string, content: string, overwrite?: boolean) {
+export async function receiveFile(app: App, filename: string, content: string, overwrite?: boolean): Promise<string | void> {
 	try {
 		let finalName = filename;
 		const incomingBytes = conversion(content);
@@ -172,7 +172,7 @@ export async function receiveFile(app: App, filename: string, content: string, o
 		console.debug(`[OPV] Saving as ${finalName}`);
 		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);
 		new Notice(`Saved file: ${finalName}.`);
-		return;
+		return finalName;
 	} catch (e) {
 		console.error("[OPV] Error while saving file", e);
 		new Notice("Error saving file.");

@@ -178,18 +178,16 @@ export class SyncHandler {
       return;
     }
 
-    const key = this.plugin.settings.encryptionKey;
-
     await sendSecureMessage(
       this.plugin.activeWriter,
-      this.plugin.settings.channelName,
+      sharedItem.id,
       this.plugin.settings.senderId,
       {
         type: type,
         path: path,
         syncPayload: base64Payload,
       },
-      key,
+      sharedItem.pin || "",
     );
   }
 

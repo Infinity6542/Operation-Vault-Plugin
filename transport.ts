@@ -4,7 +4,6 @@ import {
 	decryptPacket,
 	arrayBufferToBase64,
 	encryptBinary,
-	decryptBinary,
 } from "./crypto";
 import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {
@@ -199,9 +198,13 @@ async function handleIn(
       context = `sent`
     } else {
       // No key found
-      console.debug(`[OPV] No key could be found for item ${message.channel_id}`);
-      key = "";
-      // return;
+      if (plugin.activeDownloads.has(message.channel_id)) {
+        key = plugin.activeDownloads.get(message.channel_id) || "";
+        context = `downloaded`;
+      } else {
+        console.debug(`[OPV] No key could be found for item ${message.channel_id}`);
+        return;
+      }
     }
   }
 
@@ -258,9 +261,32 @@ async function handleIn(
 
 			const base64String = arrayBufferToBase64(file.buffer);
 
-			await receiveFile(app, decrypted.filename || "unnamed", base64String);
-			incomingFiles.delete(decrypted.fileId);
+			const path = await receiveFile(app, decrypted.filename || "unnamed", base64String);
+			incomingFiles.delete(decrypted.fileId)
 			console.debug(`[OPV] Received file: ${decrypted.fileId}`);
+      
+      if (path && !plugin.settings.sharedItems.some(i => i.path === message.channel_id)) {
+        const pin = plugin.activeDownloads.get(message.channel_id) || "";
+
+        const item: SharedItem = {
+          id: message.channel_id,
+          path: path,
+          pin: pin || "",
+          key: key,
+          createdAt: Date.now(),
+          shares: 0,
+        };
+
+        plugin.settings.sharedItems.push(item);
+        await plugin.saveSettings();
+
+        plugin.activeDownloads.delete(message.channel_id);
+
+        const tFile = app.vault.getAbstractFileByPath(path);
+        if (tFile instanceof TFile) {
+          await plugin.syncHandler.startSync(tFile);
+        }
+      }
 			break;
 		}
 		case "download_request": {
@@ -375,17 +401,17 @@ async function handleIn(
       }
       break;
     }
-    case "awareness": {
-      if (decrypted.path && decrypted.awarenessPayload) {
-        plugin.syncHandler.handleAwarenessUpdate(
-          decrypted.path,
-          decrypted.awarenessPayload,
-        );
-      } else {
-        console.error("[OPV] Invalid awareness message:", decrypted);
-      }
-      break;
-    }
+    // case "awareness": {
+    //   if (decrypted.path && decrypted.awarenessPayload) {
+    //    plugin.syncHandler.handleAwarenessUpdate(
+    //      decrypted.path,
+    //      decrypted.awarenessPayload,
+    //    );
+    //  } else {
+    //    console.error("[OPV] Invalid awareness message:", decrypted);
+    //  }
+    //  break;
+    // }
 		default:
 			console.error("[OPV] Unknown message type:", decrypted.type);
 	}

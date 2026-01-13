@@ -136,14 +136,28 @@ export class SyncHandler {
       const newContent = doc.getText("content").toJSON();
 
       const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-      if (view && view instanceof MarkdownView && view.file?.path === path) {
-        const editor = view.editor;
-        const cursor = editor.getCursor();
-        if (editor.getValue() !== newContent) {
-          editor.setValue(newContent);
-          editor.setCursor(cursor);
+      let cursor = null;
+      let editor = null;
+      if (view && view.file && view.file.path === path) {
+        editor = view.editor;
+        cursor = editor.getCursor();
+      }
+
+      if (editor) {
+        const currentContent = editor.getValue();
+        if (currentContent === newContent) return;
+        
+        editor.setValue(newContent);
+        if (cursor) {
+          const lineCount = editor.lineCount();
+          let newLine = Math.min(cursor.line, lineCount - 1);
+          if (newLine < 0) newLine = 0;
+          const lineLength = editor.getLine(newLine).length;
+          let newCh = Math.min(cursor.ch, lineLength);
+          editor.setCursor({ line: newLine, ch: newCh });
         }
       }
+
       const file = this.app.vault.getAbstractFileByPath(path);
       if (file instanceof TFile) {
         await this.app.vault.process(file, () => newContent);

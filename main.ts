@@ -37,12 +37,12 @@ function generateUUID(): string {
 	});
 }
 
-function generateKey(): string {
-	return (
-		Math.random().toString(36).substring(2, 15) +
-		Math.random().toString(36).substring(2, 15)
-	);
-}
+// function generateKey(): string {
+//  	return (
+// 		Math.random().toString(36).substring(2, 15) +
+// 		Math.random().toString(36).substring(2, 15)
+// 	);
+// }
 
 export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	settings: PluginSettings;
@@ -75,42 +75,6 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			} else {
 				new Notice("No other users online.");
 			}
-		});
-
-		this.addRibbonIcon("dice", "Test connection", async () => {
-			const url = this.settings.serverUrl;
-			const channel = this.settings.channelName;
-
-			new Notice("Trying connection...");
-
-			// activeWriter is defined when connectToServer is called
-			// this.activeWriter = await connectToServer(url, channel, this.app, this);
-			if (this.activeTransport) {
-				new Notice("Looks like you're already connected!");
-				console.error("[OPV] Already connected to server.");
-				return;
-			}
-			this.activeTransport = await connectToServer(url, channel, this);
-		});
-
-		this.addRibbonIcon("text", "Chat", async () => {
-			if (!this.activeWriter) {
-				new Notice("Not connected to server.");
-				console.debug("[OPV] No active writer found.");
-				return;
-			}
-			new Notice("Broadcasting message...");
-			await sendSecureMessage(
-				this.activeWriter,
-				this.settings.channelName,
-				this.settings.senderId,
-				{
-					type: "chat",
-					content: "Helloooooo!",
-				},
-        this.settings.encryptionKey
-			);
-			new Notice("Sent the message :)");
 		});
 
 		this.addRibbonIcon("paper-plane", "Send file", async () => {
@@ -152,10 +116,6 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			new DownloadModal(this.app, this).open();
 		});
 
-    this.addRibbonIcon("refresh-cw", "Sync file", async () => {
-      await startSync(this);
-    });
-
     this.registerEvent(
       this.app.workspace.on("file-open", async (file) => {
         if (!file) return;
@@ -171,8 +131,24 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
           console.debug(`[OPV] File opened is not shared: ${file.path}`);
         }
       })
+
     );
+    await this.tryConnect();
 	}
+
+  async tryConnect() {
+    if (this.activeTransport) {
+      console.debug("[OPV] Already connected to server.");
+      return;
+    }
+    try {
+      this.activeTransport = await connectToServer(this.settings.serverUrl, this.settings.channelName, this);
+    } catch (e) {
+      console.error("[OPV] Connection to server failed:", e);
+      this.activeTransport = null;
+    }
+  }
+
 
 	async loadSettings() {
 		this.settings = Object.assign(

@@ -24,7 +24,7 @@ export type { SharedItem };
 const defaultSettings: PluginSettings = {
 	serverUrl: "https://127.0.0.1:8080/ws",
 	channelName: "vault-1",
-	encryptionKey: "wow-really-cool-secret-444",
+	encryptionKey: "default",
 	senderId: "",
 	sharedItems: [],
 };
@@ -107,7 +107,8 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				{
 					type: "chat",
 					content: "Helloooooo!",
-				}
+				},
+        this.settings.encryptionKey
 			);
 			new Notice("Sent the message :)");
 		});
@@ -131,7 +132,8 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				this.settings.channelName,
 				activeFile,
 				this.app,
-				this.settings.senderId
+				this.settings.senderId,
+        this.settings.encryptionKey,
 			);
 		});
 
@@ -333,11 +335,12 @@ export class ShareModal extends Modal {
 
 	async createShare() {
 		const shareId = generateUUID();
+    const key = this.pin ? this.pin : "";
 		const newShare: SharedItem = {
 			id: shareId,
 			path: this.file.path,
 			pin: this.pin ? this.pin : undefined,
-			key: generateKey(),
+			key: key,
 			createdAt: Date.now(),
 			shares: 0,
 		};
@@ -348,12 +351,18 @@ export class ShareModal extends Modal {
 				console.debug("[OPV] No active transport found.");
 				return;
 			}
-			await upload(this, shareId, newShare.pin);
+			await upload(this, shareId, newShare.key);
 		}
 
 		this.plugin.settings.sharedItems.push(newShare);
 		await this.plugin.saveSettings();
-		new Notice(`Shared ${this.file.name} successfully!`);
+
+    await navigator.clipboard.writeText(shareId);
+    if (this.pin) {
+		  new Notice(`Shared ${this.file.name}. The PIN has been copied to your clipboard.`);
+    } else {
+      new Notice(`Shared ${this.file.name}. No PIN was provided, so the ShareID has been copied to your clipboard.`);
+    }
 	}
 
 	onClose() {

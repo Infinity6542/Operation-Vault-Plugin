@@ -22,6 +22,9 @@ export class SyncHandler {
   async startSync(file: TFile) {
     if (openDocs.has(file.path)) return;
 
+    const sharedItem = this.plugin.settings.sharedItems.find(i => i.path === file.path);
+    const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
+
     const doc = new Y.Doc();
     const yText = doc.getText("content");
     openDocs.set(file.path, doc);
@@ -55,7 +58,8 @@ export class SyncHandler {
               type: "sync_update",
               path: file.path,
               syncPayload: base64Update,
-            }
+            },
+            key
           )
         }
       })();
@@ -164,6 +168,14 @@ export class SyncHandler {
     const base64Payload = arrayBufferToBase64(payload.buffer as ArrayBuffer);
     if (!this.plugin.activeWriter) return;
 
+    const sharedItem = this.plugin.settings.sharedItems.find(i => i.path === path);
+    if (!sharedItem) {
+      console.error(`[OPV] No shared item found for path: ${path}`);
+      return;
+    }
+
+    const key = sharedItem.pin || sharedItem.key;
+
     await sendSecureMessage(
       this.plugin.activeWriter,
       this.plugin.settings.channelName,
@@ -172,7 +184,8 @@ export class SyncHandler {
         type: type,
         path: path,
         syncPayload: base64Payload,
-      }
+      },
+      key,
     );
   }
 

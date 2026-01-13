@@ -1,11 +1,14 @@
 import type { InnerMessage } from "./types";
 
-const secret = "wow_really_cool_secret_444";
-
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-async function getKey(password: string) {
+const SALT_LEN: number = 16;
+const IV_LEN: number = 12;
+const ITERATIONS: number = 100000;
+const KEY_LEN: number = 256
+
+async function getKey(password: string, salt: BufferSource) {
 	const keyMaterial = await window.crypto.subtle.importKey(
 		"raw",
 		encoder.encode(password),
@@ -17,20 +20,21 @@ async function getKey(password: string) {
 	return window.crypto.subtle.deriveKey(
 		{
 			name: "PBKDF2",
-			salt: encoder.encode("some_salt"),
-			iterations: 100000,
+			salt: salt,
+			iterations: ITERATIONS,
 			hash: "SHA-256",
 		},
 		keyMaterial,
-		{ name: "AES-GCM", length: 256 },
+		{ name: "AES-GCM", length: KEY_LEN },
 		false,
 		["encrypt", "decrypt"]
 	);
 }
 
-export async function encryptPacket(data: InnerMessage): Promise<string> {
-	const key = await getKey(secret);
-	const iv = window.crypto.getRandomValues(new Uint8Array(12));
+export async function encryptPacket(data: InnerMessage, secret: string): Promise<string> {
+  const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
+	const key = await getKey(secret, salt);
+	const iv = window.crypto.getRandomValues(new Uint8Array(IV_LEN));
 	const jsonStr = JSON.stringify(data);
 
 	const encrypted = await window.crypto.subtle.encrypt(
@@ -43,6 +47,7 @@ export async function encryptPacket(data: InnerMessage): Promise<string> {
 	);
 
 	const packageData = {
+    salt: arrayBufferToBase64(salt.buffer),
 		iv: arrayBufferToBase64(iv.buffer),
 		data: arrayBufferToBase64(encrypted),
 	};
@@ -50,15 +55,17 @@ export async function encryptPacket(data: InnerMessage): Promise<string> {
 	return JSON.stringify(packageData);
 }
 
-export async function decryptPacket(payload: string): Promise<InnerMessage | null> {
+export async function decryptPacket(payload: string, secret: string): Promise<InnerMessage | null> {
 	try {
-		const pkg = JSON.parse(payload) as { iv: string; data: string };
-		const key = await getKey(secret);
+		const pkg = JSON.parse(payload) as { salt: string; iv: string; data: string };
 
-		if (!pkg.iv || !pkg.data) {
+		if (!pkg.iv || !pkg.data || !pkg.salt) {
 			throw new Error("Invalid payload structure");
 		}
+
+    const salt = base64ToArrayBuffer(pkg.salt);
 		const iv = base64ToArrayBuffer(pkg.iv);
+		const key = await getKey(secret, new Uint8Array(salt));
 		const encryptedContent = base64ToArrayBuffer(pkg.data);
 
 		const decryptedBytes = await window.crypto.subtle.decrypt(
@@ -83,8 +90,9 @@ export async function encryptBinary(
 	keyStr: string
 ): Promise<Uint8Array> | null {
 	try {
-		const key = await getKey(keyStr);
-		const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
+		const iv = window.crypto.getRandomValues(new Uint8Array(IV_LEN));
+		const key = await getKey(keyStr, salt);
 
 		const encrypted = await window.crypto.subtle.encrypt(
 			{
@@ -95,9 +103,10 @@ export async function encryptBinary(
 			data
 		);
 
-		const result = new Uint8Array(iv.byteLength + encrypted.byteLength);
-		result.set(iv, 0);
-		result.set(new Uint8Array(encrypted), iv.byteLength);
+		const result = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
+		result.set(salt, 0);
+    result.set(iv, salt.length)
+		result.set(new Uint8Array(encrypted), iv.length + salt.length);
 
 		return result;
 	} catch (e) {
@@ -111,10 +120,11 @@ export async function decryptBinary(
 	keyStr: string
 ): Promise<Uint8Array> | null {
 	try {
-		const key = await getKey(keyStr);
-		const iv = data.slice(0, 12);
-		const encrypted = data.slice(12);
+    const salt = data.slice(0, SALT_LEN);
+		const iv = data.slice(SALT_LEN, SALT_LEN + IV_LEN);
+		const encrypted = data.slice(SALT_LEN + IV_LEN);
 
+		const key = await getKey(keyStr, salt);
 		const decrypted = await window.crypto.subtle.decrypt(
 			{
 				name: "AES-GCM",
@@ -162,3 +172,4 @@ export async function getHash(input: ArrayBuffer): Promise<string> {
 
 	return hashHex;
 }
+

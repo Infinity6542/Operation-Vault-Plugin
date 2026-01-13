@@ -84,9 +84,10 @@ export async function sendSecureMessage(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channelId: string,
 	senderId: string,
-	innerData: InnerMessage
+	innerData: InnerMessage,
+  key: string,
 ) {
-	const encryptedPayload = await encryptPacket(innerData);
+	const encryptedPayload = await encryptPacket(innerData, key);
 
 	const packet: TransportPacket = {
 		type: "message",
@@ -186,7 +187,16 @@ async function handleIn(
 		console.error("[OPV] Invalid message", message);
 		return;
 	}
-	const decrypted = await decryptPacket(message.payload);
+  let key: string = "";
+  const sharedItem = plugin.settings.sharedItems.find(i => i.id === message.channel_id);
+
+  if (sharedItem) {
+    key = sharedItem.pin || sharedItem.pin;
+  } else {
+    // No key found
+    console.debug(`[OPV] No key could be found for item ${message.channel_id}`);
+  }
+	const decrypted = await decryptPacket(message.payload, key);
 
 	if (!decrypted) {
 		console.error("[OPV] Empty decrypted content", decrypted);
@@ -273,7 +283,8 @@ async function handleIn(
 					plugin.settings.channelName,
 					fileToSend,
 					app,
-					plugin.settings.senderId
+					plugin.settings.senderId,
+          key
 				);
 				shareItem.shares++;
 				void plugin.saveSettings();
@@ -305,7 +316,7 @@ async function handleIn(
           path: "request_batch",
           payload: JSON.stringify(filesToRequest),
         }
-        await sendSecureMessage(writer, plugin.settings.channelName, plugin.settings.senderId, req);
+        await sendSecureMessage(writer, plugin.settings.channelName, plugin.settings.senderId, req, key);
       }
       break;
     }
@@ -330,7 +341,7 @@ async function handleIn(
             path: path,
             payload: arrayBufferToBase64(content),
           };
-          await sendSecureMessage(writer, plugin.settings.channelName, plugin.settings.senderId, updateMessage);
+          await sendSecureMessage(writer, plugin.settings.channelName, plugin.settings.senderId, updateMessage, key);
         }
       }
       break;
@@ -466,7 +477,6 @@ export async function download(
 		const nameBytes = decrypted.slice(2, 2 + nameLen);
 		const name = decoder.decode(nameBytes);
 		decrypted = decrypted.slice(2 + nameLen);
-;window
 		if (decrypted.buffer instanceof ArrayBuffer) {
 			await receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
 		} else {
@@ -505,11 +515,13 @@ export async function remove(transport: WebTransport | null, shareId: string) {
 	}
 }
 
-export async function startSync(plugin: IOpVaultPlugin) {
+export async function startSync(plugin: IOpVaultPlugin, pin?: string) {
   if (!plugin.activeWriter) {
     new Notice("No active connection for sync.");
     return;
   }
+
+  const key = pin && pin.length > 0 ? pin : plugin.settings.encryptionKey;
 
   new Notice("Starting sync");
   console.debug("[OPV] Starting sync");
@@ -529,7 +541,8 @@ export async function startSync(plugin: IOpVaultPlugin) {
       type: "diffs",
       path: "manifest",
       content: JSON.stringify(manifest),
-    }
+    },
+    key
   );
 
   console.debug(`[OPV] Manifest sent with ${manifest.length} items`);

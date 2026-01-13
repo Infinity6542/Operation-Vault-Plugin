@@ -21,8 +21,12 @@ export async function sendFileChunked(
 	channel: string,
 	file: TFile,
 	app: App,
-	senderId: string
+	senderId: string,
+  key: string,
 ) {
+  // const channel = settings.channelName;
+  // const senderId = settings.senderId;
+  // const key = settings.encryptionKey;
 	const chunkSize = 64 * 1024; // 64KB
 
 	try {
@@ -44,7 +48,7 @@ export async function sendFileChunked(
 			content: "",
 			filename: file.name,
 			fileId: fileId,
-		});
+		}, key);
 
 		let offset = 0;
 		let chunkIndex = 0;
@@ -59,7 +63,7 @@ export async function sendFileChunked(
 				content: base64Chunk,
 				fileId: fileId,
 				chunkIndex: chunkIndex,
-			});
+			}, key);
 
 			offset += chunkSize;
 			chunkIndex++;
@@ -84,7 +88,7 @@ export async function sendFileChunked(
 			content: "",
 			fileId: fileId,
 			filename: file.name,
-		});
+		}, key);
 		console.debug(`[OPV] Finished sending ${file.name}.`);
 
 		progress.setMessage(`File ${file.name} was sent.`);

@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import * as diff from "fast-diff";
+import diff from "fast-diff";
 import { App, TFile, Notice, MarkdownView, normalizePath } from "obsidian";
 import { sendSecureMessage } from "./transport";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./crypto";
@@ -23,6 +23,10 @@ export class SyncHandler {
     if (openDocs.has(file.path)) return;
 
     const sharedItem = this.plugin.settings.sharedItems.find(i => i.path === file.path);
+    if (!sharedItem) {
+      console.error(`[OPV] No shared item found for path: ${file.path}`);
+      return;
+    }
     const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
 
     const doc = new Y.Doc();

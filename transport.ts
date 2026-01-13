@@ -188,14 +188,18 @@ async function handleIn(
 		return;
 	}
   let key: string = "";
-  const sharedItem = plugin.settings.sharedItems.find(i => i.id === message.channel_id);
-
-  if (sharedItem) {
-    key = sharedItem.pin || sharedItem.pin;
+  if (message.channel_id === plugin.settings.channelName) {
+    key = plugin.settings.encryptionKey;
   } else {
-    // No key found
-    console.debug(`[OPV] No key could be found for item ${message.channel_id}`);
+    const sharedItem = plugin.settings.sharedItems.find(i => i.id === message.channel_id);
+    if (sharedItem) {
+      key = sharedItem.pin || sharedItem.pin;
+    } else {
+      // No key found
+      console.debug(`[OPV] No key could be found for item ${message.channel_id}`);
+    }
   }
+
 	const decrypted = await decryptPacket(message.payload, key);
 
 	if (!decrypted) {
@@ -267,16 +271,20 @@ async function handleIn(
 				);
 				break;
 			}
-			if (shareItem.pin && shareItem.pin !== decrypted.pin) {
-				console.error(
-					`[OPV] Invalid PIN for shared item ID: ${decrypted.shareId}`
-				);
-				break;
-			}
+
+      const expectedPin = shareItem.pin || "";
+      const incomingPin = decrypted.pin || "";
+
+      if (expectedPin.length > 0 && expectedPin !== incomingPin) {
+        console.error(`[OPV] Invalid PIN for download request of share ID: ${decrypted.shareId}`);
+        break;
+      }
 
 			const fileToSend = app.vault.getAbstractFileByPath(shareItem.path);
 			if (fileToSend instanceof TFile) {
 				new Notice(`Sending shared file: ${fileToSend.basename}`);
+
+        const transferKey = plugin.settings.encryptionKey;
 
 				await sendFileChunked(
 					writer,
@@ -284,7 +292,7 @@ async function handleIn(
 					fileToSend,
 					app,
 					plugin.settings.senderId,
-          key
+          transferKey
 				);
 				shareItem.shares++;
 				void plugin.saveSettings();
@@ -422,72 +430,30 @@ export async function upload(modal: UploadModal, shareId: string, pin?: string) 
 	}
 }
 
-export async function download(
-	shareId: string,
-	app: App,
-	plugin: IOpVaultPlugin,
-	pin?: string
+export async function requestFile(
+  shareId: string,
+  plugin: IOpVaultPlugin,
+  pin?: string
 ) {
-	const transport = plugin.activeTransport;
-	if (!transport) return new Notice("No active connection.");
+  if (!plugin.activeWriter) {
+    new Notice("No active connection for download.");
+    return;
+  }
 
-	try {
-		new Notice(`Downloading item "${shareId}"`);
+  console.debug(`[OPV] Requesting file with share ID: ${shareId}`);
+  new Notice(`Requesting file...`);
 
-		const stream = await transport.createBidirectionalStream();
-		const writer = stream.writable.getWriter();
-		const reader = stream.readable.getReader() as ReadableStreamDefaultReader<Uint8Array>;
-
-		const header =
-			JSON.stringify({ type: "download", payload: shareId }) + "\n";
-		const encoder = new TextEncoder();
-		const decoder = new TextDecoder();
-		await writer.write(encoder.encode(header));
-
-		const chunks: Uint8Array[] = [];
-		let size = 0;
-		while (true) {
-			const { value, done } = await reader.read();
-			if (done) break;
-			chunks.push(value);
-			size += value.length;
-		}
-
-		if (size === 0) {
-			new Notice("File is empty or is nonexistent.");
-			return;
-		}
-
-		const encrypted = new Uint8Array(size);
-		let offset = 0;
-		for (const chunk of chunks) {
-			encrypted.set(chunk, offset);
-			offset += chunk.length;
-		}
-
-		const key = pin && pin.length > 0 ? pin : plugin.settings.encryptionKey;
-		let decrypted = await decryptBinary(encrypted, key);
-
-		if (!decrypted) {
-			new Notice("Decryption failed. Possibly wrong pin or key.");
-			return;
-		}
-
-		const nameLen = decrypted[0] | (decrypted[1] << 8);
-		const nameBytes = decrypted.slice(2, 2 + nameLen);
-		const name = decoder.decode(nameBytes);
-		decrypted = decrypted.slice(2 + nameLen);
-		if (decrypted.buffer instanceof ArrayBuffer) {
-			await receiveFile(app, name, arrayBufferToBase64(decrypted.buffer));
-		} else {
-			new Notice("Decrypted data is invalid.");
-		}
-	} catch (e) {
-		console.error("[OPV] Error during file download", e);
-		new Notice(
-			"Error during file download. Check console for more information."
-		);
-	}
+  await sendSecureMessage(
+    plugin.activeWriter,
+    plugin.settings.channelName,
+    plugin.settings.senderId,
+    {
+      type: "download_request",
+      shareId: shareId,
+      pin: pin || "",
+    },
+    plugin.settings.encryptionKey
+  )
 }
 
 export async function remove(transport: WebTransport | null, shareId: string) {

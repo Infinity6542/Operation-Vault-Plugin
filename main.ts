@@ -11,7 +11,7 @@ import {
 	connectToServer,
 	sendSecureMessage,
 	upload,
-	download,
+	requestFile,
 	remove,
   startSync,
 } from "./transport";
@@ -383,7 +383,7 @@ export class DownloadModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h2", { text: `Download Shared Item` });
+		contentEl.createEl("h2", { text: `Download shared item` });
 
 		new Setting(contentEl)
 			.setName("Share ID")
@@ -426,13 +426,7 @@ export class DownloadModal extends Modal {
 		new Notice(`Starting download for Share ID: ${this.shareId}`);
 		console.debug(`[OPV] Starting download for Share ID: ${this.shareId}`);
 
-		if (!this.plugin.activeTransport) {
-			new Notice("Not connected to server.");
-			console.debug("[OPV] No active transport found.");
-			return;
-		}
-
-		await download(this.shareId, this.app, this.plugin, this.pin);
+    await requestFile(this.shareId, this.plugin, this.pin);
 
 		this.close();
 	}

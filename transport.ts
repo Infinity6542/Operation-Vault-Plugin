@@ -275,7 +275,7 @@ async function handleIn(
       const expectedPin = shareItem.pin || "";
       const incomingPin = decrypted.pin || "";
 
-      if (expectedPin.length > 0 && expectedPin !== incomingPin) {
+      if (expectedPin !== incomingPin) {
         console.error(`[OPV] Invalid PIN for download request of share ID: ${decrypted.shareId}`);
         break;
       }

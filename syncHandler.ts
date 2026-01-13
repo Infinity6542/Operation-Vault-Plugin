@@ -27,7 +27,7 @@ export class SyncHandler {
       console.error(`[OPV] No shared item found for path: ${file.path}`);
       return;
     }
-    const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
+    // const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
 
     const doc = new Y.Doc();
     const yText = doc.getText("content");
@@ -51,22 +51,7 @@ export class SyncHandler {
 
       if (origin === "remote" || origin === "local-load") return;
 
-      void (async () => {
-        const base64Update = arrayBufferToBase64(update.buffer as ArrayBuffer);
-        if (this.plugin.activeWriter) {
-          await sendSecureMessage(
-            this.plugin.activeWriter,
-            this.plugin.settings.channelName,
-            this.plugin.settings.senderId,
-            {
-              type: "sync_update",
-              path: file.path,
-              syncPayload: base64Update,
-            },
-            key
-          )
-        }
-      })();
+      void this.sendSyncMessage(file.path, "sync_update", update);
     });
 
     const stateVector = Y.encodeStateVector(doc);
@@ -178,7 +163,7 @@ export class SyncHandler {
       return;
     }
 
-    const key = sharedItem.pin || sharedItem.key;
+    const key = this.plugin.settings.encryptionKey;
 
     await sendSecureMessage(
       this.plugin.activeWriter,

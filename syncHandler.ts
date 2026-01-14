@@ -1,9 +1,9 @@
 import * as Y from "yjs";
 import diff from "fast-diff";
 import { App, TFile, Notice, MarkdownView, normalizePath } from "obsidian";
-import { sendSecureMessage } from "./transport";
+import { sendSecureMessage, sendRawJSON } from "./transport";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./crypto";
-import { IOpVaultPlugin} from "./types";
+import { IOpVaultPlugin, TransportPacket } from "./types";
 
 const openDocs = new Map<string, Y.Doc>();
 
@@ -226,5 +226,30 @@ export class SyncHandler {
 				}
 			}
 		}, "local");
+	}
+
+	async cleanup() {
+		console.debug("[OPV] Cleaning up SyncHandler");
+		for (const i of this.plugin.settings.sharedItems) {
+			const packet: TransportPacket = {
+				type: "leave",
+				channel_id: i.id,
+				sender_id: this.plugin.settings.senderId,
+				payload: "bye bye!",
+			};
+			await sendRawJSON(this.plugin.activeWriter, packet);
+			console.debug(`[OPV] Left transfer channel ${i.id}`);
+		}
+
+		for (const timer of this.saveTimers.values()) {
+			clearTimeout(timer);
+		}
+		this.saveTimers.clear();
+
+		for (const doc of openDocs.values()) {
+			doc.destroy();
+		}
+		openDocs.clear();
+		console.debug("[OPV] SyncHandler cleanup complete");
 	}
 }

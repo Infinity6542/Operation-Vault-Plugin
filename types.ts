@@ -9,6 +9,7 @@ export interface IOpVaultPlugin {
 	syncHandler: SyncHandler;
 	onlineUsers: string[];
 	activeDownloads: Map<string, string>;
+	heartbeatInterval: ReturnType<typeof setTimeout> | null;
 	updatePresence(count: number): void;
 	saveSettings(): Promise<void>;
 	registerEvent(event: EventRef): void;

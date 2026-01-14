@@ -63,7 +63,7 @@ export async function connectToServer(
 
 		void readLoop(reader, app, plugin, writer);
 
-		setInterval(() => {
+		plugin.heartbeatInterval = setInterval(() => {
 			if (writer) {
 				const packet = {
 					type: "heartbeat",
@@ -74,7 +74,7 @@ export async function connectToServer(
 				void sendRawJSON(writer, packet);
 				console.debug("[OPV] Sent heartbeat ping.");
 			}
-		}, 10000);
+		}, 10000) as unknown as ReturnType<typeof setTimeout>;
 
 		return transport;
 	} catch (e) {
@@ -82,6 +82,42 @@ export async function connectToServer(
 		new Notice("Something went wrong.");
 		return null;
 	}
+}
+
+export async function disconnect(plugin: IOpVaultPlugin) {
+	console.debug("[OPV] Disconnecting");
+
+	await plugin.syncHandler.cleanup();
+
+	await sendRawJSON(
+		plugin.activeWriter,
+		{
+			type: "leave",
+			channel_id: plugin.settings.channelName,
+			sender_id: plugin.settings.senderId,
+			payload: "Goodbye!",
+		} as TransportPacket
+	);
+
+	if (plugin.activeTransport) {
+		plugin.activeTransport.close();
+		plugin.activeTransport = null;
+	}
+
+	if (plugin.activeWriter) {
+		await plugin.activeWriter.close();
+		plugin.activeWriter = null;
+	}
+
+	plugin.updatePresence(0);
+
+	if (plugin.heartbeatInterval) {
+		clearInterval(plugin.heartbeatInterval);
+		plugin.heartbeatInterval = null;
+	}
+
+	new Notice("Disconnected from server.");
+	console.debug("[OPV] Disconnected");
 }
 
 export async function sendSecureMessage(
@@ -103,7 +139,7 @@ export async function sendSecureMessage(
 	await sendRawJSON(writer, packet);
 }
 
-async function sendRawJSON(
+export async function sendRawJSON(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	data:
 		| TransportPacket

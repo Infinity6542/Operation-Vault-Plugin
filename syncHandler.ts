@@ -83,8 +83,12 @@ export class SyncHandler {
 	}
 
 	getStatePath(file: TFile): string {
+		const prefix =
+			(file.parent?.path || "") && (file.parent?.path || "") !== "/"
+				? `${file.parent?.path || ""}/`
+				: "";
 		console.debug(file);
-		return normalizePath(`.${file.path}.yjs`);
+		return normalizePath(`${prefix}.${file.name}.yjs`);
 	}
 
 	triggerSaveState(file: TFile, doc: Y.Doc) {

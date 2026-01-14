@@ -1,10 +1,12 @@
 import {
 	App,
+	debounce,
 	Modal,
 	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	TFolder,
 	TFile,
 } from "obsidian";
 import {
@@ -18,6 +20,7 @@ import {
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
 import type { SharedItem, PluginSettings, IOpVaultPlugin } from "./types";
+import { FolderSelector } from "./components";
 
 export type { SharedItem };
 
@@ -240,14 +243,32 @@ class vaultSettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Inbox")
 			.setDesc("Default path to store items.")
-			.addText((text) =>
+			.addText((text) => {
+				const validate = (path: string) => {
+					const file = this.app.vault.getAbstractFileByPath(path);
+					const isValid = file && file instanceof TFolder;
+					text.inputEl.toggleClass("folder-error-input", !isValid);
+					text.inputEl.title = isValid ? "" : "Folder not found";
+				}
+
+				const saveAndValidate = async (value: string) => {
+					this.plugin.settings.inboxPath = value;
+					await this.plugin.saveSettings();
+					validate(value);
+				};
+
+				const debounceUpdate = debounce(saveAndValidate, 500);
+
 				text
 					.setValue(this.plugin.settings.inboxPath)
 					.onChange(async (value) => {
-						this.plugin.settings.inboxPath = value;
-						await this.plugin.saveSettings();
-					})
-			);
+						debounceUpdate(value);
+					});
+
+				validate(this.plugin.settings.inboxPath);
+
+				new FolderSelector(this.app, text.inputEl);
+			});
 
 		containerEl.createEl("hr");
 		new Setting(containerEl).setName("Shared items").setHeading();

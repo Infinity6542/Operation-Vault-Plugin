@@ -13,6 +13,7 @@ import {
 	requestFile,
 	remove,
 	joinChannel,
+	disconnect,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
@@ -26,6 +27,7 @@ const defaultSettings: PluginSettings = {
 	encryptionKey: "default",
 	senderId: "",
 	sharedItems: [],
+	inboxPath: "",
 };
 
 function generateUUID(): string {
@@ -184,7 +186,9 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	}
 
 	onunload() {
-		console.debug("[OPV] We're done here... Bye bye :)");
+		void disconnect(this).then(() => {
+			console.debug("[OPV] We're done here... Bye bye :)");
+		});
 	}
 }
 
@@ -233,6 +237,18 @@ class vaultSettingsTab extends PluginSettingTab {
 					})
 			);
 
+		new Setting(containerEl)
+			.setName("Inbox")
+			.setDesc("Default path to store items.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.inboxPath)
+					.onChange(async (value) => {
+						this.plugin.settings.inboxPath = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
 		containerEl.createEl("hr");
 		new Setting(containerEl).setName("Shared items").setHeading();
 
@@ -275,7 +291,11 @@ class vaultSettingsTab extends PluginSettingTab {
 							}
 							new Notice(`Revoking share for ${item.path}...`);
 							console.debug(`[OPV] Revoking share for ${item.path}...`);
-							await remove(this.plugin.activeTransport, item.id);
+							await remove(
+								this.plugin.activeTransport,
+								item.id,
+								this.plugin.settings.senderId
+							);
 							this.plugin.settings.sharedItems.splice(index, 1);
 							await this.plugin.saveSettings();
 							this.display();

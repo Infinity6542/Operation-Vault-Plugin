@@ -118,10 +118,23 @@ export class SyncHandler {
 		this.saveTimers.set(path, timer);
 	}
 
-	async handleSyncMessage(type: string, path: string, payload: string) {
-		const doc = openDocs.get(path);
-		if (!doc) return;
+	async handleSyncMessage(type: string, channelId: string, payload: string) {
+		const sharedItem = this.plugin.settings.sharedItems.find(
+			(i) => i.id === channelId
+		);
+		if (!sharedItem) {
+			console.debug(`[OPV] No shared item for channel: ${channelId}, ignoring ${type}`);
+			return;
+		}
 
+		const path = sharedItem.path;
+		const doc = openDocs.get(path);
+		if (!doc) {
+			console.debug(`[OPV] No open doc for path: ${path}, ignoring ${type}`);
+			return;
+		}
+
+		console.debug(`[OPV] Handling sync message: ${type} for ${path}`);
 		const data: Uint8Array = new Uint8Array(base64ToArrayBuffer(payload));
 
 		switch (type) {
@@ -142,6 +155,7 @@ export class SyncHandler {
 		this.isRemoteUpdate = true;
 		try {
 			Y.applyUpdate(doc, update, "remote");
+			console.debug(`[OPV] Applied Yjs update for ${path}`);
 
 			const newContent = doc.getText("content").toJSON();
 
@@ -155,23 +169,32 @@ export class SyncHandler {
 
 			if (editor) {
 				const currentContent = editor.getValue();
-				if (currentContent === newContent) return;
-
-				editor.setValue(newContent);
-				if (cursor) {
-					const lineCount = editor.lineCount();
-					let newLine = Math.min(cursor.line, lineCount - 1);
-					if (newLine < 0) newLine = 0;
-					const lineLength = editor.getLine(newLine).length;
-					let newCh = Math.min(cursor.ch, lineLength);
-					editor.setCursor({ line: newLine, ch: newCh });
+				if (currentContent === newContent) {
+					console.debug(
+						`[OPV] Content unchanged for ${path}, skipping editor update`
+					);
+				} else {
+					console.debug(`[OPV] Updating editor content for ${path}`);
+					editor.setValue(newContent);
+					if (cursor) {
+						const lineCount = editor.lineCount();
+						let newLine = Math.min(cursor.line, lineCount - 1);
+						if (newLine < 0) newLine = 0;
+						const lineLength = editor.getLine(newLine).length;
+						let newCh = Math.min(cursor.ch, lineLength);
+						editor.setCursor({ line: newLine, ch: newCh });
+					}
 				}
 			}
 
+			// Always update the file on disk, even if editor is not open
 			const file = this.app.vault.getAbstractFileByPath(path);
 			if (file instanceof TFile) {
 				await this.app.vault.process(file, () => newContent);
+				console.debug(`[OPV] Saved file to disk: ${path}`);
 			}
+		} catch (e) {
+			console.error(`[OPV] Error applying update to ${path}:`, e);
 		} finally {
 			this.isRemoteUpdate = false;
 		}

@@ -1,4 +1,4 @@
-import { App, TFile, EventRef } from "obsidian";
+import { App, EventRef, TFile, TFolder, SearchResult } from "obsidian";
 import { SyncHandler } from "./syncHandler";
 
 export interface IOpVaultPlugin {
@@ -62,6 +62,7 @@ export interface PluginSettings {
 	encryptionKey: string;
 	senderId: string;
 	sharedItems: SharedItem[];
+	inboxPath: string;
 }
 
 export interface UploadModal {
@@ -81,4 +82,9 @@ export interface ManifestItem {
 	mtime: number;
 	size?: number;
 	hash?: string;
+}
+
+export interface FolderMatch {
+	item: TFolder;
+	match: SearchResult;
 }

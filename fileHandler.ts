@@ -6,6 +6,8 @@ function generateFileId(): string {
 	return Math.random().toString(36).substring(2, 15);
 }
 
+//TODO: Add progress indication
+//TODO: Implement handling folders
 export async function sendFileChunked(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channel: string,
@@ -149,12 +151,28 @@ export async function receiveFile(
 	app: App,
 	filename: string,
 	content: string,
-	overwrite?: boolean
+	inboxPath: string,
+	overwrite?: boolean,
 ): Promise<string | void> {
 	try {
 		let finalName = filename;
 		const incomingBytes = conversion(content);
 		const incomingBuffer = incomingBytes.buffer;
+
+		// Normalize inboxPath: ensure trailing slash if non-empty
+		let normalizedInbox = inboxPath.trim();
+		if (normalizedInbox && !normalizedInbox.endsWith("/")) {
+			normalizedInbox += "/";
+		}
+
+		// Ensure inbox folder exists
+		if (normalizedInbox) {
+			const folderPath = normalizedInbox.slice(0, -1); // Remove trailing slash for folder check
+			const folder = app.vault.getAbstractFileByPath(folderPath);
+			if (!folder) {
+				await app.vault.createFolder(folderPath);
+			}
+		}
 
 		const existing = app.vault.getAbstractFileByPath(finalName);
 		let duplicate = false;
@@ -179,8 +197,9 @@ export async function receiveFile(
 			while (app.vault.getAbstractFileByPath(finalName)) {
 				finalName = nameFile(finalName, duplicate);
 			}
-			new Notice(`File exists. Saving as ${finalName}`);
 		}
+
+		finalName = `${normalizedInbox}${finalName}`;
 
 		console.debug(`[OPV] Saving as ${finalName}`);
 		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);

@@ -4,6 +4,7 @@ import {
 	decryptPacket,
 	arrayBufferToBase64,
 	encryptBinary,
+	decryptBinary,
 } from "./crypto";
 import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {
@@ -65,14 +66,28 @@ export async function connectToServer(
 
 		plugin.heartbeatInterval = setInterval(() => {
 			if (writer) {
-				const packet = {
+				// Send heartbeat to main channel
+				const mainPacket = {
 					type: "heartbeat",
 					channel_id: channelID,
 					sender_id: plugin.settings.senderId,
 					payload: "ping",
 				};
-				void sendRawJSON(writer, packet);
-				console.debug("[OPV] Sent heartbeat ping.");
+				void sendRawJSON(writer, mainPacket);
+
+				// Send heartbeat to all file channels to keep them alive
+				for (const item of plugin.settings.sharedItems) {
+					const filePacket = {
+						type: "heartbeat",
+						channel_id: item.id,
+						sender_id: plugin.settings.senderId,
+						payload: "ping",
+					};
+					void sendRawJSON(writer, filePacket);
+				}
+				console.debug(
+					`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels).`
+				);
 			}
 		}, 10000) as unknown as ReturnType<typeof setTimeout>;
 
@@ -84,20 +99,17 @@ export async function connectToServer(
 	}
 }
 
-export async function disconnect(plugin: IOpVaultPlugin) {
+export async function disconnect(plugin: IOpVaultPlugin): Promise<null> {
 	console.debug("[OPV] Disconnecting");
 
 	await plugin.syncHandler.cleanup();
 
-	await sendRawJSON(
-		plugin.activeWriter,
-		{
-			type: "leave",
-			channel_id: plugin.settings.channelName,
-			sender_id: plugin.settings.senderId,
-			payload: "Goodbye!",
-		} as TransportPacket
-	);
+	await sendRawJSON(plugin.activeWriter, {
+		type: "leave",
+		channel_id: plugin.settings.channelName,
+		sender_id: plugin.settings.senderId,
+		payload: "Goodbye!",
+	} as TransportPacket);
 
 	if (plugin.activeTransport) {
 		plugin.activeTransport.close();
@@ -118,6 +130,7 @@ export async function disconnect(plugin: IOpVaultPlugin) {
 
 	new Notice("Disconnected from server.");
 	console.debug("[OPV] Disconnected");
+	return;
 }
 
 export async function sendSecureMessage(
@@ -247,10 +260,10 @@ async function handleIn(
 				key = plugin.activeDownloads.get(message.channel_id) || "";
 				context = `downloaded`;
 			} else {
-				console.debug(
-					`[OPV] No key could be found for item ${message.channel_id}`
-				);
-				return;
+				// console.debug(
+				// 	`[OPV] No key could be found for item ${message.channel_id}`
+				// );
+				key = "";
 			}
 		}
 	}
@@ -261,6 +274,8 @@ async function handleIn(
 		console.debug(context);
 		return;
 	}
+
+	// console.debug(`[OPV] Received something: ${decrypted.type}`);
 
 	switch (decrypted.type) {
 		case "chat":
@@ -311,7 +326,8 @@ async function handleIn(
 			const path = await receiveFile(
 				app,
 				decrypted.filename || "unnamed",
-				base64String
+				base64String,
+				plugin.settings.inboxPath
 			);
 			incomingFiles.delete(decrypted.fileId);
 			console.debug(`[OPV] Received file: ${decrypted.fileId}`);
@@ -461,16 +477,23 @@ async function handleIn(
 			const path = decrypted.path;
 			// const content = base64ToArrayBuffer(decrypted.content);
 
-			await receiveFile(app, path, decrypted.content, true);
+			// Don't use inboxPath for updates - we're updating an existing file at its current path
+			await receiveFile(
+				app,
+				path,
+				decrypted.content,
+				"",
+				true
+			);
 			break;
 		}
 		case "sync_vector":
 		case "sync_snapshot":
 		case "sync_update": {
-			if (decrypted.path && decrypted.syncPayload) {
+			if (decrypted.syncPayload) {
 				await plugin.syncHandler.handleSyncMessage(
 					decrypted.type,
-					decrypted.path,
+					message.channel_id,
 					decrypted.syncPayload
 				);
 			}
@@ -567,7 +590,11 @@ export async function requestFile(
 	);
 }
 
-export async function remove(transport: WebTransport | null, shareId: string) {
+export async function remove(
+	transport: WebTransport | null,
+	shareId: string,
+	senderId: string
+) {
 	if (!transport) return new Notice("No active connection.");
 
 	try {
@@ -578,7 +605,12 @@ export async function remove(transport: WebTransport | null, shareId: string) {
 		// was successful.
 		// const reader = stream.readable.getReader();
 
-		const header = JSON.stringify({ type: "remove", payload: shareId }) + "\n";
+		const header =
+			JSON.stringify({
+				type: "remove",
+				payload: shareId,
+				sender_id: senderId,
+			}) + "\n";
 		await writer.write(encoder.encode(header));
 		await writer.close();
 

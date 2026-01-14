@@ -1,16 +1,6 @@
 import { App, TFile, Notice } from "obsidian";
 import { sendSecureMessage } from "./transport";
-import { getHash } from "./crypto";
-
-function arrayBufferTobase64(buffer: ArrayBuffer): string {
-	let binary = "";
-	const bytes = new Uint8Array(buffer);
-	const len = bytes.byteLength;
-	for (let i = 0; i < len; i++) {
-		binary += String.fromCharCode(bytes[i]);
-	}
-	return btoa(binary);
-}
+import { getHash, arrayBufferToBase64 } from "./crypto";
 
 function generateFileId(): string {
 	return Math.random().toString(36).substring(2, 15);
@@ -22,11 +12,11 @@ export async function sendFileChunked(
 	file: TFile,
 	app: App,
 	senderId: string,
-  key: string,
+	key: string
 ) {
-  // const channel = settings.channelName;
-  // const senderId = settings.senderId;
-  // const key = settings.encryptionKey;
+	// const channel = settings.channelName;
+	// const senderId = settings.senderId;
+	// const key = settings.encryptionKey;
 	const chunkSize = 64 * 1024; // 64KB
 
 	try {
@@ -43,27 +33,39 @@ export async function sendFileChunked(
 		);
 
 		// Let server now file incoming
-		await sendSecureMessage(writer, channel, senderId, {
-			type: "file_start",
-			content: "",
-			filename: file.name,
-			fileId: fileId,
-		}, key);
+		await sendSecureMessage(
+			writer,
+			channel,
+			senderId,
+			{
+				type: "file_start",
+				content: "",
+				filename: file.name,
+				fileId: fileId,
+			},
+			key
+		);
 
-		let offset = 0;
-		let chunkIndex = 0;
-		let lastPercent = 0;
+		let offset: number = 0;
+		let chunkIndex: number = 0;
+		let lastPercent: number = 0;
 
 		while (offset < totalBytes) {
 			const slice = arrayBuffer.slice(offset, offset + chunkSize);
-			const base64Chunk = arrayBufferTobase64(slice);
+			const base64Chunk = arrayBufferToBase64(slice);
 
-			await sendSecureMessage(writer, channel, senderId, {
-				type: "file_chunk",
-				content: base64Chunk,
-				fileId: fileId,
-				chunkIndex: chunkIndex,
-			}, key);
+			await sendSecureMessage(
+				writer,
+				channel,
+				senderId,
+				{
+					type: "file_chunk",
+					content: base64Chunk,
+					fileId: fileId,
+					chunkIndex: chunkIndex,
+				},
+				key
+			);
 
 			offset += chunkSize;
 			chunkIndex++;
@@ -83,12 +85,18 @@ export async function sendFileChunked(
 		}
 
 		// Transfer end notice
-		await sendSecureMessage(writer, channel, senderId, {
-			type: "file_end",
-			content: "",
-			fileId: fileId,
-			filename: file.name,
-		}, key);
+		await sendSecureMessage(
+			writer,
+			channel,
+			senderId,
+			{
+				type: "file_end",
+				content: "",
+				fileId: fileId,
+				filename: file.name,
+			},
+			key
+		);
 		console.debug(`[OPV] Finished sending ${file.name}.`);
 
 		progress.setMessage(`File ${file.name} was sent.`);
@@ -137,7 +145,12 @@ export function nameFile(oName: string, duplicate?: boolean): string {
 	return finalName;
 }
 
-export async function receiveFile(app: App, filename: string, content: string, overwrite?: boolean): Promise<string | void> {
+export async function receiveFile(
+	app: App,
+	filename: string,
+	content: string,
+	overwrite?: boolean
+): Promise<string | void> {
 	try {
 		let finalName = filename;
 		const incomingBytes = conversion(content);
@@ -146,12 +159,12 @@ export async function receiveFile(app: App, filename: string, content: string, o
 		const existing = app.vault.getAbstractFileByPath(finalName);
 		let duplicate = false;
 
-    if (overwrite && existing instanceof TFile) {
-      console.debug(`[OPV] Overwriting existing file: ${finalName}`);
-      await app.vault.modifyBinary(existing, incomingBuffer as ArrayBuffer);
-      new Notice(`Overwritten file: ${finalName}.`);
-      return;
-    }
+		if (overwrite && existing instanceof TFile) {
+			console.debug(`[OPV] Overwriting existing file: ${finalName}`);
+			await app.vault.modifyBinary(existing, incomingBuffer as ArrayBuffer);
+			new Notice(`Overwritten file: ${finalName}.`);
+			return;
+		}
 
 		if (existing instanceof TFile && incomingBuffer instanceof ArrayBuffer) {
 			const existingBuffer = await app.vault.readBinary(existing);

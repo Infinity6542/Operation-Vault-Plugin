@@ -6,29 +6,41 @@ export interface IOpVaultPlugin {
 	app: App;
 	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null;
 	activeTransport: WebTransport | null;
-  syncHandler: SyncHandler;
+	syncHandler: SyncHandler;
 	onlineUsers: string[];
-  activeDownloads: Map<string, string>;
+	activeDownloads: Map<string, string>;
 	updatePresence(count: number): void;
 	saveSettings(): Promise<void>;
-  registerEvent(event: EventRef): void;
+	registerEvent(event: EventRef): void;
 }
 
 export interface InnerMessage {
-	type: "chat" | "file_start" | "file_chunk" | "file_end" | "download_request" | "diffs" | "changes" | "update" | "sync_vector" | "sync_snapshot" | "sync_update" | "awareness";
+	type:
+		| "chat"
+		| "file_start"
+		| "file_chunk"
+		| "file_end"
+		| "download_request"
+		| "diffs"
+		| "changes"
+		| "update"
+		| "sync_vector"
+		| "sync_snapshot"
+		| "sync_update"
+		| "awareness";
 	content?: string;
 	filename?: string;
 	fileId?: string;
 	chunkIndex?: number;
 	shareId?: string;
 	pin?: string;
-  path?: string;
-  syncPayload?: string;
-  awarenessPayload?: string;
+	path?: string;
+	syncPayload?: string;
+	awarenessPayload?: string;
 }
 
 export interface TransportPacket {
-	type: "join" | "message" | "user_list" | "heartbeat";
+	type: "join" | "message" | "user_list" | "heartbeat" | "leave";
 	channel_id: string;
 	sender_id: string;
 	payload: string;
@@ -58,14 +70,14 @@ export interface UploadModal {
 }
 
 export interface SyncMessage {
-  type: "diffs" | "changes" | "update";
-  path: string;
-  payload: string;
+	type: "diffs" | "changes" | "update";
+	path: string;
+	payload: string;
 }
 
 export interface ManifestItem {
-  path: string;
-  mtime: number;
-  size?: number;
-  hash?: string;
+	path: string;
+	mtime: number;
+	size?: number;
+	hash?: string;
 }

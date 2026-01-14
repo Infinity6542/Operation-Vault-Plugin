@@ -8,212 +8,223 @@ import { IOpVaultPlugin} from "./types";
 const openDocs = new Map<string, Y.Doc>();
 
 export class SyncHandler {
-  app: App;
-  plugin: IOpVaultPlugin;
-  isRemoteUpdate: boolean = false;
+	app: App;
+	plugin: IOpVaultPlugin;
+	isRemoteUpdate: boolean = false;
 
-  saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(app: App, plugin: IOpVaultPlugin) {
-    this.app = app;
-    this.plugin = plugin;
-  }
+	constructor(app: App, plugin: IOpVaultPlugin) {
+		this.app = app;
+		this.plugin = plugin;
+	}
 
-  async startSync(file: TFile) {
-    if (openDocs.has(file.path)) return;
+	async startSync(file: TFile) {
+		if (openDocs.has(file.path)) return;
 
-    const sharedItem = this.plugin.settings.sharedItems.find(i => i.path === file.path);
-    if (!sharedItem) {
-      console.error(`[OPV] No shared item found for path: ${file.path}`);
-      return;
-    }
-    // const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
+		const sharedItem = this.plugin.settings.sharedItems.find(
+			(i) => i.path === file.path
+		);
+		if (!sharedItem) {
+			console.error(`[OPV] No shared item found for path: ${file.path}`);
+			return;
+		}
+		// const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
 
-    const doc = new Y.Doc();
-    const yText = doc.getText("content");
-    openDocs.set(file.path, doc);
+		const doc = new Y.Doc();
+		const yText = doc.getText("content");
+		openDocs.set(file.path, doc);
 
-    const stateLoaded = await this.loadYjsState(file, doc);
+		const stateLoaded = await this.loadYjsState(file, doc);
 
-    if (!stateLoaded) {
-      // Probably a new file
-      const content = await this.app.vault.read(file);
-      doc.transact(() => {
-        yText.insert(0, content);
-      }, "local-load");
-    this.triggerSaveState(file, doc);
-    } else {
-      console.debug(`[OPV] Loaded Yjs state for file: ${file.path}`);
-    }
+		if (!stateLoaded) {
+			// Probably a new file
+			const content = await this.app.vault.read(file);
+			doc.transact(() => {
+				yText.insert(0, content);
+			}, "local-load");
+			this.triggerSaveState(file, doc);
+		} else {
+			console.debug(`[OPV] Loaded Yjs state for file: ${file.path}`);
+		}
 
-    doc.on("update", (update: Uint8Array, origin: string) => {
-      this.triggerSaveState(file, doc);
+		doc.on("update", (update: Uint8Array, origin: string) => {
+			this.triggerSaveState(file, doc);
 
-      if (origin === "remote" || origin === "local-load") return;
+			if (origin === "remote" || origin === "local-load") return;
 
-      void this.sendSyncMessage(file.path, "sync_update", update);
-    });
+			void this.sendSyncMessage(file.path, "sync_update", update);
+		});
 
-    const stateVector = Y.encodeStateVector(doc);
-    await this.sendSyncMessage(file.path, "sync_vector", stateVector);
+		const stateVector = Y.encodeStateVector(doc);
+		await this.sendSyncMessage(file.path, "sync_vector", stateVector);
 
-    this.plugin.registerEvent(
-      this.app.workspace.on("editor-change", (editor, view) => {
-        if (view.file && view.file.path === file.path) {
-          this.handleLocalEdit(editor.getValue(), yText);
-        }
-      })
-    );
+		this.plugin.registerEvent(
+			this.app.workspace.on("editor-change", (editor, view) => {
+				if (view.file && view.file.path === file.path) {
+					this.handleLocalEdit(editor.getValue(), yText);
+				}
+			})
+		);
 
-    new Notice(`Sync started for ${file.name}`);
-  }
+		new Notice(`Sync started for ${file.name}`);
+	}
 
-  async loadYjsState(file: TFile, doc: Y.Doc): Promise<boolean> {
-    const statePath: string = this.getStatePath(file);
-    if (await this.app.vault.adapter.exists(statePath)) {
-      const state = await this.app.vault.adapter.readBinary(statePath);
-      Y.applyUpdate(doc, new Uint8Array(state));
-      return true;
-    } else {
-      console.error(`[OPV] Failed to load Yjs State for ${file.path}`);
-      return false;
-    }
-  }
+	async loadYjsState(file: TFile, doc: Y.Doc): Promise<boolean> {
+		const statePath: string = this.getStatePath(file);
+		if (await this.app.vault.adapter.exists(statePath)) {
+			const state = await this.app.vault.adapter.readBinary(statePath);
+			Y.applyUpdate(doc, new Uint8Array(state));
+			return true;
+		} else {
+			console.error(`[OPV] Failed to load Yjs State for ${file.path}`);
+			return false;
+		}
+	}
 
-  getStatePath(file: TFile): string {
-    console.debug(file);
-    return normalizePath(`.${file.path}.yjs`);
-  }
+	getStatePath(file: TFile): string {
+		console.debug(file);
+		return normalizePath(`.${file.path}.yjs`);
+	}
 
-  triggerSaveState(file: TFile, doc: Y.Doc) {
-    const path: string = file.path;
-    if (this.saveTimers.has(path)) {
-      clearTimeout(this.saveTimers.get(path));
-    }
+	triggerSaveState(file: TFile, doc: Y.Doc) {
+		const path: string = file.path;
+		if (this.saveTimers.has(path)) {
+			clearTimeout(this.saveTimers.get(path));
+		}
 
-    const timer = setTimeout(() => {
-      void (async () => {
-        const state = Y.encodeStateAsUpdate(doc);
-        const statePath = this.getStatePath(file);
+		const timer = setTimeout(() => {
+			void (async () => {
+				const state = Y.encodeStateAsUpdate(doc);
+				const statePath = this.getStatePath(file);
 
-        const folder = statePath.substring(0, statePath.lastIndexOf("/"));
-        if (!(await this.app.vault.adapter.exists(folder))) {
-          await this.app.vault.adapter.mkdir(folder);
-        }
+				const folder = statePath.substring(0, statePath.lastIndexOf("/"));
+				if (!(await this.app.vault.adapter.exists(folder))) {
+					await this.app.vault.adapter.mkdir(folder);
+				}
 
-        await this.app.vault.adapter.writeBinary(statePath, state as unknown as ArrayBuffer);
-        console.debug(`[OPV] Saved Yjs state for ${file.path}`);
-      })();
-    }, 2000);
+				await this.app.vault.adapter.writeBinary(
+					statePath,
+					state as unknown as ArrayBuffer
+				);
+				console.debug(`[OPV] Saved Yjs state for ${file.path}`);
+			})();
+		}, 2000);
 
-    this.saveTimers.set(path, timer);
-  }
+		this.saveTimers.set(path, timer);
+	}
 
-  async handleSyncMessage(type: string, path: string, payload: string) {
-    const doc = openDocs.get(path);
-    if (!doc) return;
+	async handleSyncMessage(type: string, path: string, payload: string) {
+		const doc = openDocs.get(path);
+		if (!doc) return;
 
-    const data: Uint8Array = new Uint8Array(base64ToArrayBuffer(payload));
+		const data: Uint8Array = new Uint8Array(base64ToArrayBuffer(payload));
 
-    switch (type) {
-      case "sync_vector":{
-        const update = Y.encodeStateAsUpdate(doc, data);
-        await this.sendSyncMessage(path, "sync_snapshot", update);
-        break;
-      }
-      case "sync_snapshot":
-      case "sync_update": {
-        await this.applyUpdateToDoc(doc, data, path);
-        break;
-      }
-    }
-  }
+		switch (type) {
+			case "sync_vector": {
+				const update = Y.encodeStateAsUpdate(doc, data);
+				await this.sendSyncMessage(path, "sync_snapshot", update);
+				break;
+			}
+			case "sync_snapshot":
+			case "sync_update": {
+				await this.applyUpdateToDoc(doc, data, path);
+				break;
+			}
+		}
+	}
 
-  async applyUpdateToDoc(doc: Y.Doc, update: Uint8Array, path: string) {
-    this.isRemoteUpdate = true;
-    try {
-      Y.applyUpdate(doc, update, "remote");
+	async applyUpdateToDoc(doc: Y.Doc, update: Uint8Array, path: string) {
+		this.isRemoteUpdate = true;
+		try {
+			Y.applyUpdate(doc, update, "remote");
 
-      const newContent = doc.getText("content").toJSON();
+			const newContent = doc.getText("content").toJSON();
 
-      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-      let cursor = null;
-      let editor = null;
-      if (view && view.file && view.file.path === path) {
-        editor = view.editor;
-        cursor = editor.getCursor();
-      }
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			let cursor = null;
+			let editor = null;
+			if (view && view.file && view.file.path === path) {
+				editor = view.editor;
+				cursor = editor.getCursor();
+			}
 
-      if (editor) {
-        const currentContent = editor.getValue();
-        if (currentContent === newContent) return;
-        
-        editor.setValue(newContent);
-        if (cursor) {
-          const lineCount = editor.lineCount();
-          let newLine = Math.min(cursor.line, lineCount - 1);
-          if (newLine < 0) newLine = 0;
-          const lineLength = editor.getLine(newLine).length;
-          let newCh = Math.min(cursor.ch, lineLength);
-          editor.setCursor({ line: newLine, ch: newCh });
-        }
-      }
+			if (editor) {
+				const currentContent = editor.getValue();
+				if (currentContent === newContent) return;
 
-      const file = this.app.vault.getAbstractFileByPath(path);
-      if (file instanceof TFile) {
-        await this.app.vault.process(file, () => newContent);
-      }
-    } finally {
-      this.isRemoteUpdate = false;
-    }
-  }
+				editor.setValue(newContent);
+				if (cursor) {
+					const lineCount = editor.lineCount();
+					let newLine = Math.min(cursor.line, lineCount - 1);
+					if (newLine < 0) newLine = 0;
+					const lineLength = editor.getLine(newLine).length;
+					let newCh = Math.min(cursor.ch, lineLength);
+					editor.setCursor({ line: newLine, ch: newCh });
+				}
+			}
 
-  async sendSyncMessage(path: string, type: "sync_vector" | "sync_snapshot" | "sync_update", payload: Uint8Array) {
-    const base64Payload = arrayBufferToBase64(payload.buffer as ArrayBuffer);
-    if (!this.plugin.activeWriter) return;
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile) {
+				await this.app.vault.process(file, () => newContent);
+			}
+		} finally {
+			this.isRemoteUpdate = false;
+		}
+	}
 
-    const sharedItem = this.plugin.settings.sharedItems.find(i => i.path === path);
-    if (!sharedItem) {
-      console.error(`[OPV] No shared item found for path: ${path}`);
-      return;
-    }
+	async sendSyncMessage(
+		path: string,
+		type: "sync_vector" | "sync_snapshot" | "sync_update",
+		payload: Uint8Array
+	) {
+		const base64Payload = arrayBufferToBase64(payload.buffer as ArrayBuffer);
+		if (!this.plugin.activeWriter) return;
 
-    await sendSecureMessage(
-      this.plugin.activeWriter,
-      sharedItem.id,
-      this.plugin.settings.senderId,
-      {
-        type: type,
-        path: path,
-        syncPayload: base64Payload,
-      },
-      sharedItem.pin || "",
-    );
-  }
+		const sharedItem = this.plugin.settings.sharedItems.find(
+			(i) => i.path === path
+		);
+		if (!sharedItem) {
+			console.error(`[OPV] No shared item found for path: ${path}`);
+			return;
+		}
 
-  handleLocalEdit(newContent: string, yText: Y.Text) {
-    if (this.isRemoteUpdate) return;
+		await sendSecureMessage(
+			this.plugin.activeWriter,
+			sharedItem.id,
+			this.plugin.settings.senderId,
+			{
+				type: type,
+				path: path,
+				syncPayload: base64Payload,
+			},
+			sharedItem.pin || ""
+		);
+	}
 
-    const currentContent = yText.toJSON();
-    if (currentContent === newContent) return;
+	handleLocalEdit(newContent: string, yText: Y.Text) {
+		if (this.isRemoteUpdate) return;
 
-    const diffs = diff(currentContent, newContent);
-    let index = 0;
-    yText.doc?.transact(() => {
-      for (const [type, text] of diffs) {
-        switch (type) {
-          case diff.EQUAL:
-            index += text.length;
-            break;
-          case diff.INSERT:
-            yText.insert(index, text);
-            index += text.length;
-            break;
-          case diff.DELETE:
-            yText.delete(index, text.length);
-            break;
-        }
-      }
-    }, "local");
-  }
+		const currentContent = yText.toJSON();
+		if (currentContent === newContent) return;
+
+		const diffs = diff(currentContent, newContent);
+		let index = 0;
+		yText.doc?.transact(() => {
+			for (const [type, text] of diffs) {
+				switch (type) {
+					case diff.EQUAL:
+						index += text.length;
+						break;
+					case diff.INSERT:
+						yText.insert(index, text);
+						index += text.length;
+						break;
+					case diff.DELETE:
+						yText.delete(index, text.length);
+						break;
+				}
+			}
+		}, "local");
+	}
 }

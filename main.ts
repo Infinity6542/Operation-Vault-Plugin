@@ -12,7 +12,7 @@ import {
 	upload,
 	requestFile,
 	remove,
-  joinChannel,
+	joinChannel,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
@@ -47,8 +47,9 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	settings: PluginSettings;
 	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
 	activeTransport: WebTransport | null = null;
-  activeDownloads: Map<string, string> = new Map();
-  syncHandler: SyncHandler;
+	activeDownloads: Map<string, string> = new Map();
+	heartbeatInterval: ReturnType<typeof setTimeout> | null = null;
+	syncHandler: SyncHandler;
 	statusBarItem: HTMLElement;
 	onlineUsers: string[] = [];
 
@@ -62,7 +63,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			console.debug(`[OPV] Generated new sender ID: ${this.settings.senderId}`);
 		}
 
-    this.syncHandler = new SyncHandler(this.app, this);
+		this.syncHandler = new SyncHandler(this.app, this);
 
 		this.addSettingTab(new vaultSettingsTab(this.app, this));
 
@@ -97,7 +98,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				activeFile,
 				this.app,
 				this.settings.senderId,
-        this.settings.encryptionKey,
+				this.settings.encryptionKey
 			);
 		});
 
@@ -116,50 +117,48 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			new DownloadModal(this.app, this).open();
 		});
 
-    this.registerEvent(
-      this.app.workspace.on("file-open", async (file) => {
-        if (!file) return;
+		this.registerEvent(
+			this.app.workspace.on("file-open", async (file) => {
+				if (!file) return;
 
-        const shared = this.settings.sharedItems.some(
-          (item) => item.path === file.path
-        );
+				const shared = this.settings.sharedItems.some(
+					(item) => item.path === file.path
+				);
 
-        if (shared) {
-          console.debug(`[OPV] File opened is shared: ${file.path}`);
-          await this.syncHandler.startSync(file);
-        } else {
-          console.debug(`[OPV] File opened is not shared: ${file.path}`);
-        }
-      })
-
-    );
-    await this.tryConnect();
+				if (shared) {
+					console.debug(`[OPV] File opened is shared: ${file.path}`);
+					await this.syncHandler.startSync(file);
+				} else {
+					console.debug(`[OPV] File opened is not shared: ${file.path}`);
+				}
+			})
+		);
+		await this.tryConnect();
 	}
 
-  async tryConnect() {
-    if (this.activeTransport) {
-      console.debug("[OPV] Already connected to server.");
-      return;
-    }
-    try {
-      this.activeTransport = await connectToServer(this.settings.serverUrl, this.settings.channelName, this);
+	async tryConnect() {
+		if (this.activeTransport) {
+			console.debug("[OPV] Already connected to server.");
+			return;
+		}
+		try {
+			this.activeTransport = await connectToServer(
+				this.settings.serverUrl,
+				this.settings.channelName,
+				this
+			);
 
-      if (this.activeWriter) {
-        console.debug("[OPV] Rejoining share channels.");
-        for (const item of this.settings.sharedItems) {
-          await joinChannel(
-            this.activeWriter,
-            item.id,
-            this.settings.senderId,
-          );
-        }
-      }
-    } catch (e) {
-      console.error("[OPV] Connection to server failed:", e);
-      this.activeTransport = null;
-    }
-  }
-
+			if (this.activeWriter) {
+				console.debug("[OPV] Rejoining share channels.");
+				for (const item of this.settings.sharedItems) {
+					await joinChannel(this.activeWriter, item.id, this.settings.senderId);
+				}
+			}
+		} catch (e) {
+			console.error("[OPV] Connection to server failed:", e);
+			this.activeTransport = null;
+		}
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -179,6 +178,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		if (count > 0) {
 			this.statusBarItem.setText(`🟢 Online: ${count}`);
 		} else {
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			this.statusBarItem.setText(`🔴 Offline`);
 		}
 	}
@@ -203,10 +203,14 @@ class vaultSettingsTab extends PluginSettingTab {
 		new Setting(containerEl).setName("Configuration").setHeading();
 
 		new Setting(containerEl)
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setName("Server URL")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setDesc("The server address of the WebTransport server.")
 			.addText((text) =>
 				text
+					// TODO: Change placeholder before release
+					// eslint-disable-next-line obsidianmd/ui/sentence-case
 					.setPlaceholder("https://localhost:4433")
 					.setValue(this.plugin.settings.serverUrl)
 					.onChange(async (value) => {
@@ -216,10 +220,11 @@ class vaultSettingsTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Channel Name")
-			.setDesc("The channel room ID to connect to.")
+			.setName("Global channel name")
+			.setDesc("The default broadcast channel.")
 			.addText((text) =>
 				text
+					// eslint-disable-next-line obsidianmd/ui/sentence-case
 					.setPlaceholder("vault-1")
 					.setValue(this.plugin.settings.channelName)
 					.onChange(async (value) => {
@@ -249,9 +254,11 @@ class vaultSettingsTab extends PluginSettingTab {
 				new Setting(controlDiv).addButton((btn) =>
 					btn
 						.setIcon("link")
-						.setTooltip("Copy Share ID")
+						// eslint-disable-next-line obsidianmd/ui/sentence-case
+						.setTooltip("Copy share ID")
 						.onClick(async () => {
 							await navigator.clipboard.writeText(item.id);
+							// eslint-disable-next-line obsidianmd/ui/sentence-case
 							new Notice("Share ID copied to clipboard.");
 						})
 				);
@@ -296,7 +303,9 @@ export class ShareModal extends Modal {
 		contentEl.createEl("h2", { text: `Share ${this.file.name}` });
 
 		new Setting(contentEl)
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setName("PIN (optional)")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setDesc("Set a PIN to protect access to this shared item.")
 			.addText((text) =>
 				text.setPlaceholder("1234").onChange((value) => {
@@ -308,11 +317,11 @@ export class ShareModal extends Modal {
 		// 	.setName("Upload to cloud")
 		// 	.setDesc("Store offline and offsite.")
 		// 	.addToggle((toggle) => toggle.onChange((v) => (this.upload = v)));
-    this.upload = true;
+		this.upload = true;
 
 		new Setting(contentEl).addButton((btn) => {
 			btn
-				.setButtonText("Create Share")
+				.setButtonText("Create share")
 				.setCta()
 				.onClick(async () => {
 					await this.createShare();
@@ -323,7 +332,7 @@ export class ShareModal extends Modal {
 
 	async createShare() {
 		const shareId = generateUUID();
-    const key = this.pin ? this.pin : "";
+		const key = this.pin ? this.pin : "";
 		const newShare: SharedItem = {
 			id: shareId,
 			path: this.file.path,
@@ -333,11 +342,11 @@ export class ShareModal extends Modal {
 			shares: 0,
 		};
 
-    if (!this.plugin.activeTransport) {
-      new Notice("Not connected to server.");
-      console.debug("[OPV] No active transport found.");
-      return;
-    }
+		if (!this.plugin.activeTransport) {
+			new Notice("Not connected to server.");
+			console.debug("[OPV] No active transport found.");
+			return;
+		}
 
 		if (this.upload) {
 			await upload(this, shareId, newShare.key);
@@ -345,20 +354,24 @@ export class ShareModal extends Modal {
 
 		this.plugin.settings.sharedItems.push(newShare);
 		await this.plugin.saveSettings();
-    await joinChannel(
-      this.plugin.activeWriter,
-      newShare.id,
-      this.plugin.settings.senderId,
-    );
+		await joinChannel(
+			this.plugin.activeWriter,
+			newShare.id,
+			this.plugin.settings.senderId
+		);
 
-    console.debug(`joined channel ${newShare.id} after sharing`);
+		console.debug(`joined channel ${newShare.id} after sharing`);
 
-    await navigator.clipboard.writeText(shareId);
-    if (this.pin) {
-		  new Notice(`Shared ${this.file.name}. The PIN has been copied to your clipboard.`);
-    } else {
-      new Notice(`Shared ${this.file.name}. No PIN was provided, so the ShareID has been copied to your clipboard.`);
-    }
+		await navigator.clipboard.writeText(shareId);
+		if (this.pin) {
+			new Notice(
+				`Shared ${this.file.name}. The PIN has been copied to your clipboard.`
+			);
+		} else {
+			new Notice(
+				`Shared ${this.file.name}. No PIN was provided, so the ShareID has been copied to your clipboard.`
+			);
+		}
 	}
 
 	onClose() {
@@ -382,10 +395,13 @@ export class DownloadModal extends Modal {
 		contentEl.createEl("h2", { text: `Download shared item` });
 
 		new Setting(contentEl)
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setName("Share ID")
-			.setDesc("Enter the Share ID provided to you.")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
+			.setDesc("Enter the share ID provided to you.")
 			.addText((text) =>
 				text
+					// eslint-disable-next-line obsidianmd/ui/sentence-case
 					.setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
 					.onChange((value) => {
 						this.shareId = value;
@@ -394,7 +410,8 @@ export class DownloadModal extends Modal {
 
 		new Setting(contentEl)
 			.setName("PIN")
-			.setDesc("Enter the PIN if the shared item is protected.")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
+			.setDesc("Enter the PIN if you were provided one.")
 			.addText((text) =>
 				text.setPlaceholder("1234").onChange((value) => {
 					this.pin = value;
@@ -414,7 +431,8 @@ export class DownloadModal extends Modal {
 
 	async startDownload() {
 		if (!this.shareId) {
-			new Notice("Please enter a valid Share ID.");
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
+			new Notice("Please enter a valid share ID.");
 			console.error("[OPV] No Share ID provided.");
 			return;
 		}
@@ -422,8 +440,8 @@ export class DownloadModal extends Modal {
 		new Notice(`Starting download for Share ID: ${this.shareId}`);
 		console.debug(`[OPV] Starting download for Share ID: ${this.shareId}`);
 
-    this.plugin.activeDownloads.set(this.shareId, this.pin);
-    await requestFile(this.shareId, this.plugin, this.pin);
+		this.plugin.activeDownloads.set(this.shareId, this.pin);
+		await requestFile(this.shareId, this.plugin, this.pin);
 
 		this.close();
 	}

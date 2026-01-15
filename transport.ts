@@ -4,7 +4,7 @@ import {
 	decryptPacket,
 	arrayBufferToBase64,
 	encryptBinary,
-	decryptBinary,
+// 	decryptBinary,
 } from "./crypto";
 import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {

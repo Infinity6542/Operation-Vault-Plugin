@@ -6,6 +6,9 @@ import {
 } from "obsidian";
 import { FolderMatch } from "./types";
 
+//TODO: Remake the UI, particularly tracking shares
+// Differentiate between shares and receives
+
 export class FolderSelector extends AbstractInputSuggest<FolderMatch> {
 	inputEl: HTMLInputElement;
 

@@ -28,6 +28,7 @@ const defaultSettings: PluginSettings = {
 	serverUrl: "https://127.0.0.1:8080/ws",
 	channelName: "vault-1",
 	encryptionKey: "default",
+	//TODO: Implement nicknames
 	senderId: "",
 	sharedItems: [],
 	inboxPath: "",
@@ -138,6 +139,23 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				}
 			})
 		);
+
+		this.registerEvent(
+			this.app.vault.on("rename", async (file, path) => {
+				if (!file || !(file instanceof TFile)) return;
+
+				const sharedItem = this.settings.sharedItems.find(
+					(item) => item.path === path
+				);
+				if (!sharedItem) return;
+
+				await this.syncHandler.handleRename(file, sharedItem);
+				sharedItem.path = file.path;
+				await this.saveSettings();
+				console.debug(`[OPV] File moved or renamed: ${path} -> ${file.path}`);
+			})
+		);
+
 		await this.tryConnect();
 	}
 
@@ -249,7 +267,7 @@ class vaultSettingsTab extends PluginSettingTab {
 					const isValid = file && file instanceof TFolder;
 					text.inputEl.toggleClass("folder-error-input", !isValid);
 					text.inputEl.title = isValid ? "" : "Folder not found";
-				}
+				};
 
 				const saveAndValidate = async (value: string) => {
 					this.plugin.settings.inboxPath = value;

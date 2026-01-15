@@ -3,7 +3,7 @@ import diff from "fast-diff";
 import { App, TFile, Notice, MarkdownView, normalizePath } from "obsidian";
 import { sendSecureMessage, sendRawJSON } from "./transport";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./crypto";
-import { IOpVaultPlugin, TransportPacket } from "./types";
+import { IOpVaultPlugin, TransportPacket, SharedItem } from "./types";
 
 const openDocs = new Map<string, Y.Doc>();
 
@@ -59,8 +59,11 @@ export class SyncHandler {
 		const stateVector = Y.encodeStateVector(doc);
 		await this.sendSyncMessage(file.path, "sync_vector", stateVector);
 
+		// Move this to the class (outside this function) in the future as a
+		// listener for better performance
 		this.plugin.registerEvent(
 			this.app.workspace.on("editor-change", (editor, view) => {
+				if (!view.file) return;
 				if (view.file && view.file.path === file.path) {
 					this.handleLocalEdit(editor.getValue(), yText);
 				}
@@ -278,5 +281,34 @@ export class SyncHandler {
 		}
 		openDocs.clear();
 		console.debug("[OPV] SyncHandler cleanup complete");
+	}
+
+	async handleRename(file: TFile, item: SharedItem) {
+		const oldPath = item.path;
+		const doc = openDocs.get(oldPath);
+		if (doc) {
+			openDocs.delete(oldPath);
+			openDocs.set(file.path, doc);
+		}
+
+		if (this.saveTimers.has(oldPath)) {
+			const timer = this.saveTimers.get(oldPath);
+			if (timer) clearTimeout(timer);
+			this.saveTimers.delete(oldPath);
+		}
+
+		const lastSlash = oldPath.lastIndexOf("/");
+		const oldFolder = lastSlash !== -1 ? oldPath.substring(0, lastSlash) : "";
+		const oldFilename = lastSlash !== -1 ? oldPath.substring(lastSlash + 1) : oldPath;
+		const oldStatePath = normalizePath(`${oldFolder ? oldFolder + "/" : ""}.${oldFilename}.yjs`);
+		const newStatePath = this.getStatePath(file);
+
+		if (await this.app.vault.adapter.exists(oldStatePath)) {
+			// No need to ensure directory exists as the new file is (hopefully) in that location
+			await this.app.vault.adapter.rename(oldStatePath, newStatePath);
+			console.debug(
+				`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`
+			);
+		}
 	}
 }

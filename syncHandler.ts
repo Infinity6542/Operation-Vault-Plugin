@@ -1,9 +1,16 @@
 import * as Y from "yjs";
 import diff from "fast-diff";
 import { App, TFile, Notice, MarkdownView, normalizePath } from "obsidian";
-import { sendSecureMessage, sendRawJSON } from "./transport";
+import { sendSecureMessage, sendRawJSON, leaveChannel } from "./transport";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./crypto";
-import { IOpVaultPlugin, TransportPacket, SharedItem } from "./types";
+import {
+	IOpVaultPlugin,
+	TransportPacket,
+	SharedItem,
+	SyncGroup,
+	opError,
+} from "./types";
+import { generateUUID } from "./main";
 
 const openDocs = new Map<string, Y.Doc>();
 
@@ -19,7 +26,7 @@ export class SyncHandler {
 		this.plugin = plugin;
 	}
 
-	async startSync(file: TFile) {
+	async startSync(file: TFile, group?: boolean): Promise<SharedItem | void> {
 		if (openDocs.has(file.path)) return;
 
 		const sharedItem = this.plugin.settings.sharedItems.find(
@@ -38,11 +45,8 @@ export class SyncHandler {
 		const stateLoaded = await this.loadYjsState(file, doc);
 
 		if (!stateLoaded) {
-			// Probably a new file
-			const content = await this.app.vault.read(file);
-			doc.transact(() => {
-				yText.insert(0, content);
-			}, "local-load");
+			// No Yjs state found - don't initialize yet, wait for peer state first
+			console.debug(`[OPV] No Yjs state found for ${file.path}, will initialize after sync`);
 			this.triggerSaveState(file, doc);
 		} else {
 			console.debug(`[OPV] Loaded Yjs state for file: ${file.path}`);
@@ -56,6 +60,7 @@ export class SyncHandler {
 			void this.sendSyncMessage(file.path, "sync_update", update);
 		});
 
+		// Send state vector to request peer's state
 		const stateVector = Y.encodeStateVector(doc);
 		await this.sendSyncMessage(file.path, "sync_vector", stateVector);
 
@@ -71,6 +76,9 @@ export class SyncHandler {
 		);
 
 		new Notice(`Sync started for ${file.name}`);
+		if (group) {
+			return sharedItem;
+		}
 	}
 
 	async loadYjsState(file: TFile, doc: Y.Doc): Promise<boolean> {
@@ -126,7 +134,9 @@ export class SyncHandler {
 			(i) => i.id === channelId
 		);
 		if (!sharedItem) {
-			console.debug(`[OPV] No shared item for channel: ${channelId}, ignoring ${type}`);
+			console.debug(
+				`[OPV] No shared item for channel: ${channelId}, ignoring ${type}`
+			);
 			return;
 		}
 
@@ -146,7 +156,41 @@ export class SyncHandler {
 				await this.sendSyncMessage(path, "sync_snapshot", update);
 				break;
 			}
-			case "sync_snapshot":
+			case "sync_snapshot": {
+				await this.applyUpdateToDoc(doc, data, path);
+				// After receiving initial snapshot, if doc is still empty, initialize from local file
+				const yText = doc.getText("content");
+				if (yText.length === 0) {
+					const file = this.app.vault.getAbstractFileByPath(path);
+					if (file instanceof TFile) {
+						const content = await this.app.vault.read(file);
+						if (content.length > 0) {
+							// Use sender ID as tie-breaker to avoid race condition
+							const shouldInitialize = this.plugin.settings.senderId.localeCompare(sharedItem.id) < 0;
+							if (shouldInitialize) {
+								console.debug(`[OPV] Peer had no content, initializing from local file: ${path}`);
+								doc.transact(() => {
+									yText.insert(0, content);
+								}, "local");
+								this.triggerSaveState(file, doc);
+							} else {
+								console.debug(`[OPV] Peer had no content, deferring initialization (tie-breaker)`);
+								// Wait for peer to initialize, or do it ourselves after timeout
+								setTimeout(() => {
+									if (yText.length === 0) {
+										console.debug(`[OPV] Peer didn't initialize, doing it ourselves: ${path}`);
+										doc.transact(() => {
+											yText.insert(0, content);
+										}, "local");
+										this.triggerSaveState(file, doc);
+									}
+								}, 2000);
+							}
+						}
+					}
+				}
+				break;
+			}
 			case "sync_update": {
 				await this.applyUpdateToDoc(doc, data, path);
 				break;
@@ -193,8 +237,11 @@ export class SyncHandler {
 			// Always update the file on disk, even if editor is not open
 			const file = this.app.vault.getAbstractFileByPath(path);
 			if (file instanceof TFile) {
-				await this.app.vault.process(file, () => newContent);
-				console.debug(`[OPV] Saved file to disk: ${path}`);
+				const currentFileContent = await this.app.vault.read(file);
+				if (currentFileContent !== newContent) {
+					await this.app.vault.modify(file, newContent);
+					console.debug(`[OPV] Saved file to disk: ${path}`);
+				}
 			}
 		} catch (e) {
 			console.error(`[OPV] Error applying update to ${path}:`, e);
@@ -285,6 +332,8 @@ export class SyncHandler {
 
 	async handleRename(file: TFile, item: SharedItem) {
 		const oldPath = item.path;
+		if (oldPath === file.path) return;
+
 		const doc = openDocs.get(oldPath);
 		if (doc) {
 			openDocs.delete(oldPath);
@@ -299,16 +348,110 @@ export class SyncHandler {
 
 		const lastSlash = oldPath.lastIndexOf("/");
 		const oldFolder = lastSlash !== -1 ? oldPath.substring(0, lastSlash) : "";
-		const oldFilename = lastSlash !== -1 ? oldPath.substring(lastSlash + 1) : oldPath;
-		const oldStatePath = normalizePath(`${oldFolder ? oldFolder + "/" : ""}.${oldFilename}.yjs`);
+		const oldFilename =
+			lastSlash !== -1 ? oldPath.substring(lastSlash + 1) : oldPath;
+		const oldStatePath = normalizePath(
+			`${oldFolder ? oldFolder + "/" : ""}.${oldFilename}.yjs`
+		);
 		const newStatePath = this.getStatePath(file);
 
+		if (oldStatePath === newStatePath) return;
+
 		if (await this.app.vault.adapter.exists(oldStatePath)) {
-			// No need to ensure directory exists as the new file is (hopefully) in that location
-			await this.app.vault.adapter.rename(oldStatePath, newStatePath);
-			console.debug(
-				`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`
+			try {
+				// If destination already exists, remove it first to avoid rename error
+				if (await this.app.vault.adapter.exists(newStatePath)) {
+					await this.app.vault.adapter.remove(newStatePath);
+				}
+				// No need to ensure directory exists as the new file is (hopefully) in that location
+				await this.app.vault.adapter.rename(oldStatePath, newStatePath);
+				console.debug(
+					`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`
+				);
+			} catch (e) {
+				console.error(`[OPV] Failed to rename Yjs state file:`, e);
+			}
+		}
+	}
+	async removeSyncGroup(group: SyncGroup): Promise<opError | void> {
+		// Check for server connection
+		if (!this.plugin.activeWriter || !this.plugin.activeTransport)
+			return {
+				code: -1,
+				message:
+					"activeWriter or activeTransport (or both) is null. This is likely due to the lack of a server connection.",
+			};
+
+		// Get files that are supposed to be in the group
+
+		for (const sItem of group.files) {
+			// Find the actual SharedItem in settings which has the correct local path
+			const localItem = this.plugin.settings.sharedItems.find(i => i.id === sItem.id);
+			if (!localItem) {
+				console.debug(`[OPV] Could not find SharedItem for ID ${sItem.id}`);
+				continue;
+			}
+			
+			const file = this.app.vault.getFileByPath(localItem.path);
+			if (!file) {
+				console.debug(`[OPV] Could not find file at path ${localItem.path}`);
+				// Still remove from settings even if file doesn't exist
+				this.plugin.settings.sharedItems = this.plugin.settings.sharedItems.filter(i => i.id !== sItem.id);
+				await this.plugin.saveSettings();
+				group.files = group.files.filter(i => i.id !== sItem.id);
+				await leaveChannel(
+					this.plugin.activeWriter,
+					sItem.id,
+					this.plugin.settings.senderId
+				);
+				continue;
+			}
+			await this.app.fileManager.processFrontMatter(
+				file,
+				(frontmatter: Record<string, unknown>) => {
+					const current: unknown = frontmatter["sync-group"];
+					if (!current) return;
+
+					if (Array.isArray(current)) {
+						const currentList = current as string[];
+						const newList = currentList.filter((id) => id !== group.id);
+						if (newList.length === 0) {
+							delete frontmatter["sync-group"];
+						} else {
+							frontmatter["sync-group"] = newList;
+						}
+					} else if (typeof current === "string") {
+						let values = current.split(",").map((s) => s.trim());
+						if (values.includes(group.id)) {
+							values = values.filter((id) => id !== group.id);
+							if (values.length === 0) {
+								delete frontmatter["sync-group"];
+							} else {
+								frontmatter["sync-group"] = values;
+							}
+						}
+					}
+				}
+			);
+
+			this.plugin.settings.sharedItems = this.plugin.settings.sharedItems.filter(i => i.id !== sItem.id);
+			await this.plugin.saveSettings();
+			group.files = group.files.filter(i => i.id !== sItem.id);
+			await leaveChannel(
+				this.plugin.activeWriter,
+				sItem.id,
+				this.plugin.settings.senderId
 			);
 		}
+
+		if (group.files.length > 0) {
+			console.debug(
+				`[OPV] Could not remove all files from sync group ${group.id}.`
+			);
+		}
+
+		this.plugin.settings.syncGroups = this.plugin.settings.syncGroups.filter(g => g.id !== group.id);
+		await this.plugin.saveSettings();
+		new Notice(`Removed sync group ${group.id}.`);
 	}
 }

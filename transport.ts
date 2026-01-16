@@ -4,7 +4,7 @@ import {
 	decryptPacket,
 	arrayBufferToBase64,
 	encryptBinary,
-// 	decryptBinary,
+	// 	decryptBinary,
 } from "./crypto";
 import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {
@@ -15,6 +15,7 @@ import type {
 	TransportPacket,
 	SyncMessage,
 	ManifestItem,
+	SyncGroup,
 } from "./types";
 
 const incomingFiles = new Map<string, Uint8Array[]>();
@@ -85,8 +86,17 @@ export async function connectToServer(
 					};
 					void sendRawJSON(writer, filePacket);
 				}
+				for (const group of plugin.settings.syncGroups) {
+					const filePacket = {
+						type: "heartbeat",
+						channel_id: group.id,
+						sender_id: plugin.settings.senderId,
+						payload: "ping",
+					};
+					void sendRawJSON(writer, filePacket);
+				}
 				console.debug(
-					`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels).`
+					`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels).`
 				);
 			}
 		}, 10000) as unknown as ReturnType<typeof setTimeout>;
@@ -242,28 +252,31 @@ async function handleIn(
 		console.error("[OPV] Invalid message", message);
 		return;
 	}
-	let context: string = "";
 	let key: string = "";
 	if (message.channel_id === plugin.settings.channelName) {
 		key = plugin.settings.encryptionKey;
-		context = "global";
 	} else {
 		const sharedItem = plugin.settings.sharedItems.find(
 			(i) => i.id === message.channel_id
 		);
 		if (sharedItem) {
 			key = sharedItem.pin || sharedItem.pin;
-			context = `sent`;
 		} else {
 			// No key found
 			if (plugin.activeDownloads.has(message.channel_id)) {
 				key = plugin.activeDownloads.get(message.channel_id) || "";
-				context = `downloaded`;
 			} else {
-				// console.debug(
-				// 	`[OPV] No key could be found for item ${message.channel_id}`
-				// );
-				key = "";
+				const groupItem = plugin.settings.syncGroups.find(
+					(g) => g.id === message.channel_id
+				);
+				if (groupItem && groupItem.pin) {
+					key = groupItem.pin;
+				} else {
+					// console.debug(
+					// 	`[OPV] No key could be found for item ${message.channel_id}`
+					// );
+					key = "";
+				}
 			}
 		}
 	}
@@ -271,7 +284,6 @@ async function handleIn(
 	const decrypted = await decryptPacket(message.payload, key);
 	if (!decrypted) {
 		console.error("[OPV] Empty decrypted content", decrypted);
-		console.debug(context);
 		return;
 	}
 
@@ -330,11 +342,11 @@ async function handleIn(
 				plugin.settings.inboxPath
 			);
 			incomingFiles.delete(decrypted.fileId);
-			console.debug(`[OPV] Received file: ${decrypted.fileId}`);
+			console.debug(`[OPV] Received file: ${decrypted.fileId} at path: ${path as string}`);
 
 			if (
 				path &&
-				!plugin.settings.sharedItems.some((i) => i.path === message.channel_id)
+				!plugin.settings.sharedItems.some((i) => i.id === message.channel_id)
 			) {
 				const pin = plugin.activeDownloads.get(message.channel_id) || "";
 
@@ -349,6 +361,7 @@ async function handleIn(
 
 				plugin.settings.sharedItems.push(item);
 				await plugin.saveSettings();
+				console.debug(`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`);
 
 				plugin.activeDownloads.delete(message.channel_id);
 
@@ -356,6 +369,10 @@ async function handleIn(
 				if (tFile instanceof TFile) {
 					await plugin.syncHandler.startSync(tFile);
 				}
+			} else if (path) {
+				console.debug(`[OPV] SharedItem already exists for channel: ${message.channel_id}`);
+			} else {
+				console.warn(`[OPV] Failed to save file, path is: ${path as string}`);
 			}
 			break;
 		}
@@ -478,13 +495,7 @@ async function handleIn(
 			// const content = base64ToArrayBuffer(decrypted.content);
 
 			// Don't use inboxPath for updates - we're updating an existing file at its current path
-			await receiveFile(
-				app,
-				path,
-				decrypted.content,
-				"",
-				true
-			);
+			await receiveFile(app, path, decrypted.content, "", true);
 			break;
 		}
 		case "sync_vector":
@@ -496,6 +507,54 @@ async function handleIn(
 					message.channel_id,
 					decrypted.syncPayload
 				);
+			}
+			break;
+		}
+		case "get_group": {
+			if (decrypted.content) {
+				const group = plugin.settings.syncGroups.find(
+					(g) => g.id === decrypted.content
+				);
+				if (!group) break;
+				const response: InnerMessage = {
+					type: "group_info",
+					content: JSON.stringify(group),
+				};
+				await sendSecureMessage(
+					writer,
+					message.channel_id,
+					plugin.settings.senderId,
+					response,
+					key
+				);
+			}
+			break;
+		}
+		case "group_info": {
+			if (decrypted.content) {
+				let group: SyncGroup;
+				try {
+					group = JSON.parse(decrypted.content) as SyncGroup;
+				} catch (e) {
+					console.error("[OPV] Error parsing group info payload", e);
+					new Notice("Error parsing group info payload. Check console.");
+					break;
+				}
+
+				const existingGroup = plugin.settings.syncGroups.find(
+					(g) => g.id === group.id
+				);
+				if (!existingGroup) {
+					plugin.settings.syncGroups.push(group);
+					await plugin.saveSettings();
+					plugin.activeDownloads.delete(group.id);
+					console.debug(`[OPV] Added sync group: ${group.id}`);
+				}
+
+				for (const file of group.files) {
+					plugin.activeDownloads.set(file.id, file.pin || "");
+					await requestFile(file.id, plugin, file.pin || "");
+				}
 			}
 			break;
 		}
@@ -637,4 +696,19 @@ export async function joinChannel(
 	};
 	await sendRawJSON(writer, packet);
 	console.debug(`[OPV] Joined transfer channel ${channelId}`);
+}
+
+export async function leaveChannel(
+	writer: WritableStreamDefaultWriter<Uint8Array>,
+	channelId: string,
+	senderId: string
+) {
+	const packet: TransportPacket = {
+		type: "leave",
+		channel_id: channelId,
+		sender_id: senderId,
+		payload: "Cya later :)",
+	};
+	await sendRawJSON(writer, packet);
+	console.debug(`[OPV] Left transfer channel ${channelId}`);
 }

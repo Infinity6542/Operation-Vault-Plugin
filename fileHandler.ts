@@ -169,7 +169,8 @@ export async function receiveFile(
 		if (normalizedInbox) {
 			const folderPath = normalizedInbox.slice(0, -1); // Remove trailing slash for folder check
 			const folder = app.vault.getAbstractFileByPath(folderPath);
-			if (!folder) {
+			if (!folder && (folderPath != "")) {
+				console.debug(folderPath)
 				await app.vault.createFolder(folderPath);
 			}
 		}
@@ -200,6 +201,8 @@ export async function receiveFile(
 		}
 
 		finalName = `${normalizedInbox}${finalName}`;
+		// Remove any leading slashes - Obsidian paths should not start with /
+		finalName = finalName.replace(/^\/+/, "");
 
 		console.debug(`[OPV] Saving as ${finalName}`);
 		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);

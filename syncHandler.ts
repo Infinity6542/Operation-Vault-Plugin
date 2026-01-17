@@ -52,6 +52,7 @@ export class SyncHandler {
 			void this.sendSyncMessage(file.path, "sync_update", update);
 		});
 
+		// Send state vector to request peer's state
 		const stateVector = Y.encodeStateVector(doc);
 		await this.sendSyncMessage(file.path, "sync_vector", stateVector);
 

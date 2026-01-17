@@ -285,6 +285,8 @@ export class SyncHandler {
 
 	async handleRename(file: TFile, item: SharedItem) {
 		const oldPath = item.path;
+		if (oldPath === file.path) return;
+
 		const doc = openDocs.get(oldPath);
 		if (doc) {
 			openDocs.delete(oldPath);

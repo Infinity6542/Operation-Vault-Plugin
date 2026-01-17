@@ -169,7 +169,8 @@ export async function receiveFile(
 		if (normalizedInbox) {
 			const folderPath = normalizedInbox.slice(0, -1); // Remove trailing slash for folder check
 			const folder = app.vault.getAbstractFileByPath(folderPath);
-			if (!folder) {
+			if (!folder && (folderPath != "")) {
+				console.debug(folderPath)
 				await app.vault.createFolder(folderPath);
 			}
 		}

@@ -309,8 +309,11 @@ export class SyncHandler {
 
 		const lastSlash = oldPath.lastIndexOf("/");
 		const oldFolder = lastSlash !== -1 ? oldPath.substring(0, lastSlash) : "";
-		const oldFilename = lastSlash !== -1 ? oldPath.substring(lastSlash + 1) : oldPath;
-		const oldStatePath = normalizePath(`${oldFolder ? oldFolder + "/" : ""}.${oldFilename}.yjs`);
+		const oldFilename =
+			lastSlash !== -1 ? oldPath.substring(lastSlash + 1) : oldPath;
+		const oldStatePath = normalizePath(
+			`${oldFolder ? oldFolder + "/" : ""}.${oldFilename}.yjs`
+		);
 		const newStatePath = this.getStatePath(file);
 
 		if (await this.app.vault.adapter.exists(oldStatePath)) {

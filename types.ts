@@ -89,3 +89,8 @@ export interface FolderMatch {
 	match: SearchResult;
 }
 
+export interface FileMatch {
+	item: TFile;
+	match: SearchResult;
+}
+

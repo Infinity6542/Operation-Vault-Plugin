@@ -119,7 +119,7 @@ export class ShareModal extends Modal {
 
 		new Setting(contentEl)
 			.setName("Share type")
-			.setDesc("Share a single file or create a sync group?")
+			.setDesc("Share a single file or multiple?")
 			.addDropdown((e) => {
 				e.addOption("file", "Single file")
 					.addOption("folder", "Sync group")

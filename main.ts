@@ -11,16 +11,22 @@ import {
 } from "obsidian";
 import {
 	connectToServer,
-	upload,
 	requestFile,
 	remove,
 	joinChannel,
 	disconnect,
+	sendSecureMessage,
+	leaveChannel,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
-import type { SharedItem, PluginSettings, IOpVaultPlugin } from "./types";
-import { FolderSelector } from "./components";
+import type {
+	SharedItem,
+	PluginSettings,
+	IOpVaultPlugin,
+	InnerMessage,
+} from "./types";
+import { FolderSelector, ShareModal } from "./components";
 
 export type { SharedItem };
 
@@ -32,6 +38,7 @@ const defaultSettings: PluginSettings = {
 	senderId: "",
 	sharedItems: [],
 	inboxPath: "",
+	syncGroups: [],
 };
 
 export function generateUUID(): string {
@@ -104,18 +111,14 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				activeFile,
 				this.app,
 				this.settings.senderId,
-				this.settings.encryptionKey
+				this.settings.encryptionKey,
 			);
 		});
 
 		this.addRibbonIcon("link", "Share file", async () => {
+			//* As part of the temporary UI overhaul, the user can now select the file(s)
+			//* they want to share within the modal!
 			const activeFile = this.app.workspace.getActiveFile();
-			if (!activeFile) {
-				new Notice("Open a file to share it!");
-				console.debug("[OPV] Active file is not a TFile.");
-				return;
-			}
-
 			new ShareModal(this.app, this, activeFile).open();
 		});
 
@@ -128,7 +131,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				if (!file) return;
 
 				const shared = this.settings.sharedItems.some(
-					(item) => item.path === file.path
+					(item) => item.path === file.path,
 				);
 
 				if (shared) {
@@ -137,7 +140,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				} else {
 					console.debug(`[OPV] File opened is not shared: ${file.path}`);
 				}
-			})
+			}),
 		);
 
 		this.registerEvent(
@@ -145,7 +148,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				if (!file || !(file instanceof TFile)) return;
 
 				const sharedItem = this.settings.sharedItems.find(
-					(item) => item.path === oldPath
+					(item) => item.path === oldPath,
 				);
 				if (!sharedItem) return;
 
@@ -153,9 +156,9 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				sharedItem.path = file.path;
 				await this.saveSettings();
 				console.debug(
-					`[OPV] File moved or renamed: ${oldPath} -> ${file.path}`
+					`[OPV] File moved or renamed: ${oldPath} -> ${file.path}`,
 				);
-			})
+			}),
 		);
 
 		await this.tryConnect();
@@ -170,13 +173,20 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			this.activeTransport = await connectToServer(
 				this.settings.serverUrl,
 				this.settings.channelName,
-				this
+				this,
 			);
 
 			if (this.activeWriter) {
 				console.debug("[OPV] Rejoining share channels.");
 				for (const item of this.settings.sharedItems) {
 					await joinChannel(this.activeWriter, item.id, this.settings.senderId);
+				}
+				for (const group of this.settings.syncGroups) {
+					await joinChannel(
+						this.activeWriter,
+						group.id,
+						this.settings.senderId,
+					);
 				}
 			}
 		} catch (e) {
@@ -189,7 +199,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.settings = Object.assign(
 			{},
 			defaultSettings,
-			(await this.loadData()) as PluginSettings
+			(await this.loadData()) as PluginSettings,
 		);
 	}
 
@@ -243,7 +253,7 @@ class vaultSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.serverUrl = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -257,7 +267,7 @@ class vaultSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.channelName = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -267,7 +277,7 @@ class vaultSettingsTab extends PluginSettingTab {
 				const validate = (path: string) => {
 					const file = this.app.vault.getAbstractFileByPath(path);
 					const isValid = file && file instanceof TFolder;
-					text.inputEl.toggleClass("folder-error-input", !isValid);
+					text.inputEl.toggleClass("resource-error-input", !isValid);
 					text.inputEl.title = isValid ? "" : "Folder not found";
 				};
 
@@ -291,14 +301,69 @@ class vaultSettingsTab extends PluginSettingTab {
 			});
 
 		containerEl.createEl("hr");
+		new Setting(containerEl).setName("Share groups").setHeading();
+
+		const groupList = containerEl.createEl("div");
+
+		if (this.plugin.settings.syncGroups.length === 0) {
+			groupList.createEl("p", { text: "No sync groups created yet." });
+		} else {
+			this.plugin.settings.syncGroups.forEach((item, index) => {
+				const itemDiv = groupList.createEl("div", { cls: "setting-item" });
+
+				const infoDiv = itemDiv.createEl("div", { cls: "setting-item-info" });
+				infoDiv.createEl("div", { text: item.id, cls: "setting-item-path" });
+
+				const controlDiv = itemDiv.createEl("div", {
+					cls: "setting-item-controls",
+				});
+
+				new Setting(controlDiv).addButton((btn) =>
+					btn
+						.setIcon("link")
+						// eslint-disable-next-line obsidianmd/ui/sentence-case
+						.setTooltip("Copy share ID")
+						.onClick(async () => {
+							await navigator.clipboard.writeText(item.id);
+							// eslint-disable-next-line obsidianmd/ui/sentence-case
+							new Notice("Share ID copied to clipboard.");
+						}),
+				);
+
+				new Setting(controlDiv).addButton((btn) =>
+					btn
+						.setButtonText("Revoke")
+						.setWarning()
+						.onClick(async () => {
+							if (!this.plugin.activeTransport) {
+								new Notice("Not connected to server.");
+								console.debug("[OPV] No active transport found.");
+								return;
+							}
+							new Notice(`Revoking share for group ${item.id}...`);
+							console.debug(`[OPV] Revoking share for group ${item.id}...`);
+							await this.plugin.syncHandler.removeSyncGroup(item);
+							this.display();
+						}),
+				);
+			});
+		}
+
+		containerEl.createEl("hr");
 		new Setting(containerEl).setName("Shared items").setHeading();
 
 		const shareList = containerEl.createEl("div");
+		const items = this.plugin.settings.sharedItems.filter(
+			(item) =>
+				!this.plugin.settings.syncGroups.some((group) =>
+					group.files.some((file) => file.path === item.path),
+				),
+		);
 
-		if (this.plugin.settings.sharedItems.length === 0) {
+		if (items.length === 0) {
 			shareList.createEl("p", { text: "No items are currently shared." });
 		} else {
-			this.plugin.settings.sharedItems.forEach((item, index) => {
+			items.forEach((item, index) => {
 				const itemDiv = shareList.createEl("div", { cls: "setting-item" });
 
 				const infoDiv = itemDiv.createEl("div", { cls: "setting-item-info" });

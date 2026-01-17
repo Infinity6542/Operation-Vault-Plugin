@@ -168,7 +168,7 @@ export async function receiveFile(
 			const folderPath = normalizedInbox.slice(0, -1); // Remove trailing slash for folder check
 			const folder = app.vault.getAbstractFileByPath(folderPath);
 			if (!folder && (folderPath != "")) {
-				console.debug(folderPath)
+				console.debug(`[OPV] Creating inbox folder at: ${folderPath}`);
 				await app.vault.createFolder(folderPath);
 			}
 		}

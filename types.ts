@@ -28,6 +28,8 @@ export interface InnerMessage {
 		| "sync_vector"
 		| "sync_snapshot"
 		| "sync_update"
+		| "get_group"
+		| "group_info"
 		| "awareness";
 	content?: string;
 	filename?: string;
@@ -54,6 +56,7 @@ export interface SharedItem {
 	key: string;
 	createdAt: number;
 	shares: number;
+	groups?: string[];
 }
 
 export interface PluginSettings {
@@ -63,6 +66,7 @@ export interface PluginSettings {
 	senderId: string;
 	sharedItems: SharedItem[];
 	inboxPath: string;
+	syncGroups: SyncGroup[];
 }
 
 export interface UploadModal {
@@ -92,5 +96,18 @@ export interface FolderMatch {
 export interface FileMatch {
 	item: TFile;
 	match: SearchResult;
+}
+
+export interface SyncGroup {
+	id: string;
+	files: SharedItem[];
+	pin?: string;
+}
+
+// Experimental, to be implemented later during a refactor
+export interface opError {
+	code: number;
+	// Message is optional if the code is 0.
+	message?: string;
 }
 

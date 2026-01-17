@@ -7,7 +7,6 @@ function generateFileId(): string {
 }
 
 //TODO: Add progress indication
-//TODO: Implement handling folders
 export async function sendFileChunked(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channel: string,

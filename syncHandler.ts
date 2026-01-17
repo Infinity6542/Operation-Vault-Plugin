@@ -129,7 +129,9 @@ export class SyncHandler {
 			(i) => i.id === channelId
 		);
 		if (!sharedItem) {
-			console.debug(`[OPV] No shared item for channel: ${channelId}, ignoring ${type}`);
+			console.debug(
+				`[OPV] No shared item for channel: ${channelId}, ignoring ${type}`
+			);
 			return;
 		}
 

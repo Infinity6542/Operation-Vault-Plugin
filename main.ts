@@ -181,6 +181,15 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 					this.settings.senderId,
 				);
 				this.settings.sharedItems.splice(sharedItemIndex, 1);
+				const groups = this.settings.syncGroups.filter((group) =>
+					group.files.some((f) => f.path === file.path),
+				);
+				for (const group of groups) {
+					group.files = group.files.filter((f) => f.path !== file.path);
+					if (group.files.length === 0) {
+						await this.syncHandler.removeSyncGroup(group);
+					}
+				}
 				await this.saveSettings();
 				console.debug(`[OPV] File deleted: ${file.path}`);
 			}),

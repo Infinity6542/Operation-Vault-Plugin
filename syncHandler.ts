@@ -38,11 +38,7 @@ export class SyncHandler {
 		const stateLoaded = await this.loadYjsState(file, doc);
 
 		if (!stateLoaded) {
-			// Probably a new file
-			const content = await this.app.vault.read(file);
-			doc.transact(() => {
-				yText.insert(0, content);
-			}, "local-load");
+			console.debug(`[OPV] No Yjs state found for ${file.path}, will initialize after sync`);
 			this.triggerSaveState(file, doc);
 		} else {
 			console.debug(`[OPV] Loaded Yjs state for file: ${file.path}`);

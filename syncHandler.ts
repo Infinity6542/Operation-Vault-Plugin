@@ -317,8 +317,21 @@ export class SyncHandler {
 		const newStatePath = this.getStatePath(file);
 
 		if (await this.app.vault.adapter.exists(oldStatePath)) {
-			// No need to ensure directory exists as the new file is (hopefully) in that location
-			await this.app.vault.adapter.rename(oldStatePath, newStatePath);
+			try {
+				// If destination already exists, remove it first to avoid rename error
+				if (await this.app.vault.adapter.exists(newStatePath)) {
+					await this.app.vault.adapter.remove(newStatePath);
+				}
+				// No need to ensure directory exists as the new file is (hopefully) in that location
+				await this.app.vault.adapter.rename(oldStatePath, newStatePath);
+				console.debug(
+					`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`
+				);
+			} catch (e) {
+				console.error(`[OPV] Failed to rename Yjs state file:`, e);
+			}
+		}
+	}
 			console.debug(
 				`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`
 			);

@@ -3,7 +3,13 @@ import diff from "fast-diff";
 import { App, TFile, Notice, MarkdownView, normalizePath } from "obsidian";
 import { sendSecureMessage, sendRawJSON } from "./transport";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./crypto";
-import { IOpVaultPlugin, TransportPacket, SharedItem } from "./types";
+import {
+	IOpVaultPlugin,
+	TransportPacket,
+	SharedItem,
+	SyncGroup,
+	opError,
+} from "./types";
 
 const openDocs = new Map<string, Y.Doc>();
 

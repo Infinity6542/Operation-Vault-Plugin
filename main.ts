@@ -11,7 +11,7 @@ import {
 } from "obsidian";
 import {
 	connectToServer,
-	upload,
+	// upload,
 	requestFile,
 	remove,
 	joinChannel,
@@ -23,7 +23,6 @@ import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
 import type {
 	SharedItem,
-	SyncGroup,
 	PluginSettings,
 	IOpVaultPlugin,
 	InnerMessage,

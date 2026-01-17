@@ -10,7 +10,6 @@ import {
 	SyncGroup,
 	opError,
 } from "./types";
-import { generateUUID } from "./main";
 
 const openDocs = new Map<string, Y.Doc>();
 

@@ -173,9 +173,12 @@ export class ShareModal extends Modal {
 		}
 
 		new Setting(contentEl)
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setName("PIN (optional)")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setDesc("Set up a PIN to protect access")
 			.setTooltip(
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 				"Setting up a PIN will require it to access the shared item. Don't lose it! It won't be shown again."
 			)
 			.addText((text) =>

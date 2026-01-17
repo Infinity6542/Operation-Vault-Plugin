@@ -172,4 +172,3 @@ export async function getHash(input: ArrayBuffer): Promise<string> {
 
 	return hashHex;
 }
-

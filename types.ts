@@ -57,7 +57,6 @@ export interface SharedItem {
 	createdAt: number;
 	shares: number;
 	groups?: string[];
-	owner?: string;
 }
 
 export interface PluginSettings {
@@ -105,10 +104,10 @@ export interface SyncGroup {
 	pin?: string;
 }
 
-// Experimental, to be implemented later
-// during a refactor
+// Experimental, to be implemented later during a refactor
 export interface opError {
 	code: number;
 	// Message is optional if the code is 0.
 	message?: string;
 }
+

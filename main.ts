@@ -11,7 +11,6 @@ import {
 } from "obsidian";
 import {
 	connectToServer,
-	// upload,
 	requestFile,
 	remove,
 	joinChannel,
@@ -112,21 +111,15 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				activeFile,
 				this.app,
 				this.settings.senderId,
-				this.settings.encryptionKey
+				this.settings.encryptionKey,
 			);
 		});
 
 		this.addRibbonIcon("link", "Share file", async () => {
 			//* As part of the temporary UI overhaul, the user can now select the file(s)
 			//* they want to share within the modal!
-			// const activeFile = this.app.workspace.getActiveFile();
-			// if (!activeFile) {
-			// 	new Notice("Open a file to share it!");
-			// 	console.debug("[OPV] Active file is not a TFile.");
-			// 	return;
-			// }
-
-			new ShareModal(this.app, this).open();
+			const activeFile = this.app.workspace.getActiveFile();
+			new ShareModal(this.app, this, activeFile).open();
 		});
 
 		this.addRibbonIcon("download", "Download shared item", async () => {
@@ -138,7 +131,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				if (!file) return;
 
 				const shared = this.settings.sharedItems.some(
-					(item) => item.path === file.path
+					(item) => item.path === file.path,
 				);
 
 				if (shared) {
@@ -147,7 +140,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				} else {
 					console.debug(`[OPV] File opened is not shared: ${file.path}`);
 				}
-			})
+			}),
 		);
 
 		this.registerEvent(
@@ -156,7 +149,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 
 				// Find the shared item by the old path (before rename)
 				const sharedItem = this.settings.sharedItems.find(
-					(item) => item.path === oldPath
+					(item) => item.path === oldPath,
 				);
 				if (!sharedItem) return;
 
@@ -164,9 +157,9 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				sharedItem.path = file.path;
 				await this.saveSettings();
 				console.debug(
-					`[OPV] File moved or renamed: ${oldPath} -> ${file.path}`
+					`[OPV] File moved or renamed: ${oldPath} -> ${file.path}`,
 				);
-			})
+			}),
 		);
 
 		await this.tryConnect();
@@ -181,7 +174,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			this.activeTransport = await connectToServer(
 				this.settings.serverUrl,
 				this.settings.channelName,
-				this
+				this,
 			);
 
 			if (this.activeWriter) {
@@ -193,7 +186,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 					await joinChannel(
 						this.activeWriter,
 						group.id,
-						this.settings.senderId
+						this.settings.senderId,
 					);
 				}
 			}
@@ -207,7 +200,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.settings = Object.assign(
 			{},
 			defaultSettings,
-			(await this.loadData()) as PluginSettings
+			(await this.loadData()) as PluginSettings,
 		);
 	}
 
@@ -261,7 +254,7 @@ class vaultSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.serverUrl = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -275,7 +268,7 @@ class vaultSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.channelName = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -285,7 +278,7 @@ class vaultSettingsTab extends PluginSettingTab {
 				const validate = (path: string) => {
 					const file = this.app.vault.getAbstractFileByPath(path);
 					const isValid = file && file instanceof TFolder;
-					text.inputEl.toggleClass("folder-error-input", !isValid);
+					text.inputEl.toggleClass("resource-error-input", !isValid);
 					text.inputEl.title = isValid ? "" : "Folder not found";
 				};
 
@@ -335,7 +328,7 @@ class vaultSettingsTab extends PluginSettingTab {
 							await navigator.clipboard.writeText(item.id);
 							// eslint-disable-next-line obsidianmd/ui/sentence-case
 							new Notice("Share ID copied to clipboard.");
-						})
+						}),
 				);
 
 				new Setting(controlDiv).addButton((btn) =>
@@ -352,7 +345,7 @@ class vaultSettingsTab extends PluginSettingTab {
 							console.debug(`[OPV] Revoking share for group ${item.id}...`);
 							await this.plugin.syncHandler.removeSyncGroup(item);
 							this.display();
-						})
+						}),
 				);
 			});
 		}
@@ -364,8 +357,8 @@ class vaultSettingsTab extends PluginSettingTab {
 		const items = this.plugin.settings.sharedItems.filter(
 			(item) =>
 				!this.plugin.settings.syncGroups.some((group) =>
-					group.files.some((file) => file.path === item.path)
-				)
+					group.files.some((file) => file.path === item.path),
+				),
 		);
 
 		if (items.length === 0) {
@@ -390,7 +383,7 @@ class vaultSettingsTab extends PluginSettingTab {
 							await navigator.clipboard.writeText(item.id);
 							// eslint-disable-next-line obsidianmd/ui/sentence-case
 							new Notice("Share ID copied to clipboard.");
-						})
+						}),
 				);
 
 				new Setting(controlDiv).addButton((btn) =>
@@ -403,36 +396,27 @@ class vaultSettingsTab extends PluginSettingTab {
 								console.debug("[OPV] No active transport found.");
 								return;
 							}
-							const isOwner = item.owner === this.plugin.settings.senderId;
-							if (isOwner) {
-								new Notice(`Revoking share for ${item.path}...`);
-								console.debug(`[OPV] Revoking share for ${item.path}...`);
-								await remove(
-									this.plugin.activeTransport,
-									item.id,
-									this.plugin.settings.senderId
-								);
-							} else {
-								new Notice(`Removing ${item.path} from shared items...`);
-								console.debug(
-									`[OPV] Removing ${item.path} (not owner, won't delete from server)`
-								);
-							}
+							new Notice(`Revoking share for ${item.path}...`);
+							console.debug(`[OPV] Revoking share for ${item.path}...`);
+							await remove(
+								this.plugin.activeTransport,
+								item.id,
+								this.plugin.settings.senderId,
+							);
 							await leaveChannel(
 								this.plugin.activeWriter,
 								item.id,
-								this.plugin.settings.senderId
+								this.plugin.settings.senderId,
 							);
-							// Remove from the actual settings array, not the filtered copy
 							const actualIndex = this.plugin.settings.sharedItems.findIndex(
-								(i) => i.id === item.id
+								(i) => i.id === item.id,
 							);
 							if (actualIndex !== -1) {
 								this.plugin.settings.sharedItems.splice(actualIndex, 1);
 							}
 							await this.plugin.saveSettings();
 							this.display();
-						})
+						}),
 				);
 			});
 		}
@@ -485,7 +469,7 @@ export class DownloadModal extends Modal {
 						.setPlaceholder("share-group-1")
 						.onChange((value) => {
 							this.group = value;
-						})
+						}),
 				);
 		} else {
 			new Setting(contentEl)
@@ -499,7 +483,7 @@ export class DownloadModal extends Modal {
 						.setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
 						.onChange((value) => {
 							this.shareId = value;
-						})
+						}),
 				);
 		}
 
@@ -510,7 +494,7 @@ export class DownloadModal extends Modal {
 			.addText((text) =>
 				text.setPlaceholder("1234").onChange((value) => {
 					this.pin = value;
-				})
+				}),
 			);
 
 		new Setting(contentEl).addButton((btn) => {
@@ -534,7 +518,7 @@ export class DownloadModal extends Modal {
 			await joinChannel(
 				this.plugin.activeWriter,
 				this.group,
-				this.plugin.settings.senderId
+				this.plugin.settings.senderId,
 			);
 			//TODO: Figure out how to handle collisions with the server (names)
 			await sendSecureMessage(
@@ -542,7 +526,7 @@ export class DownloadModal extends Modal {
 				this.group,
 				this.plugin.settings.senderId,
 				transportPacket,
-				this.pin
+				this.pin,
 			);
 			console.debug(`[OPV] Requested group info for group: ${this.group}`);
 		} else {

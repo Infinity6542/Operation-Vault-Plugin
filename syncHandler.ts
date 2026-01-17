@@ -44,7 +44,6 @@ export class SyncHandler {
 		const stateLoaded = await this.loadYjsState(file, doc);
 
 		if (!stateLoaded) {
-			// No Yjs state found - don't initialize yet, wait for peer state first
 			console.debug(`[OPV] No Yjs state found for ${file.path}, will initialize after sync`);
 			this.triggerSaveState(file, doc);
 		} else {
@@ -97,7 +96,6 @@ export class SyncHandler {
 			(file.parent?.path || "") && (file.parent?.path || "") !== "/"
 				? `${file.parent?.path || ""}/`
 				: "";
-		console.debug(file);
 		return normalizePath(`${prefix}.${file.name}.yjs`);
 	}
 
@@ -454,3 +452,4 @@ export class SyncHandler {
 		new Notice(`Removed sync group ${group.id}.`);
 	}
 }
+

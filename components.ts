@@ -2,8 +2,13 @@ import {
 	AbstractInputSuggest,
 	App,
 	debounce,
+	debounce,
 	prepareFuzzySearch,
 	renderMatches,
+	Modal,
+	Notice,
+	TFile,
+	Setting,
 	Modal,
 	Notice,
 	TFile,
@@ -98,11 +103,12 @@ export class ShareModal extends Modal {
 	pin: string = "";
 	upload: boolean = true;
 	item: string = "";
-	// file?: TFile;
+	activeFile: TFile;
 
-	constructor(app: App, plugin: OpVaultPlugin) {
+	constructor(app: App, plugin: OpVaultPlugin, activeFile: TFile) {
 		super(app);
 		this.plugin = plugin;
+		this.activeFile = activeFile;
 	}
 
 	onOpen() {
@@ -118,7 +124,7 @@ export class ShareModal extends Modal {
 
 		new Setting(contentEl)
 			.setName("Share type")
-			.setDesc("Share a single file or create a sync group?")
+			.setDesc("Share a single file or multiple?")
 			.addDropdown((e) => {
 				e.addOption("file", "Single file")
 					.addOption("folder", "Sync group")
@@ -139,18 +145,18 @@ export class ShareModal extends Modal {
 					const validate = (path: string) => {
 						const file = this.app.vault.getAbstractFileByPath(path);
 						const isValid = file && file instanceof TFile;
-						text.inputEl.toggleClass("folder-error-input", !isValid);
-						text.inputEl.title = isValid ? "" : "Folder not found";
+						text.inputEl.toggleClass("resource-error-input", !isValid);
+						text.inputEl.title = isValid ? "" : "File not found";
 					};
-
 					const saveAndValidate = async (value: string) => {
 						this.item = value;
 						await this.plugin.saveSettings();
 						validate(value);
 					};
-
 					const debounceUpdate = debounce(saveAndValidate, 500);
 
+					text.setPlaceholder("/path/to/file.md");
+					text.setValue(this.activeFile ? this.activeFile.path : "");
 					text.setValue(this.item).onChange(async (value) => {
 						debounceUpdate(value);
 					});
@@ -168,7 +174,7 @@ export class ShareModal extends Modal {
 					text.setValue(this.item).onChange(async (value) => {
 						this.item = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 				);
 		}
 
@@ -178,13 +184,13 @@ export class ShareModal extends Modal {
 			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setDesc("Set up a PIN to protect access")
 			.setTooltip(
-			// eslint-disable-next-line obsidianmd/ui/sentence-case
-				"Setting up a PIN will require it to access the shared item. Don't lose it! It won't be shown again."
+				// eslint-disable-next-line obsidianmd/ui/sentence-case
+				"Setting up a PIN will require it to access the shared item. Don't lose it! It won't be shown again.",
 			)
 			.addText((text) =>
 				text.setPlaceholder("1234").onChange((value) => {
 					this.pin = value;
-				})
+				}),
 			);
 
 		new Setting(contentEl)
@@ -195,7 +201,7 @@ export class ShareModal extends Modal {
 		new Setting(contentEl).addButton((btn) => {
 			btn
 				.setButtonText(
-					this.mode === "file" ? "Create share" : "Create sync group"
+					this.mode === "file" ? "Create share" : "Create sync group",
 				)
 				.setCta()
 				.onClick(async () => {
@@ -237,7 +243,7 @@ export class ShareModal extends Modal {
 				file: file,
 				app: this.app,
 				plugin: this.plugin,
-			}
+			};
 			if (!this.plugin.activeTransport) {
 				new Notice("Not connected to server.");
 				console.debug("[OPV] No active transport found.");
@@ -251,12 +257,12 @@ export class ShareModal extends Modal {
 			await joinChannel(
 				this.plugin.activeWriter,
 				newShare.id,
-				this.plugin.settings.senderId
+				this.plugin.settings.senderId,
 			);
 			console.debug(`joined channel ${newShare.id} after sharing`);
 			await navigator.clipboard.writeText(newShare.id);
 			new Notice(
-				`Shared ${file.name}. The ShareID has been copied to your clipboard.`
+				`Shared ${file.name}. The ShareID has been copied to your clipboard.`,
 			);
 		}
 	}
@@ -293,7 +299,7 @@ export class ShareModal extends Modal {
 				console.debug(
 					`Unhandled type for sync-group frontmatter in ${
 						file.path
-					}: ${typeof groups}`
+					}: ${typeof groups}`,
 				);
 			}
 		}
@@ -302,7 +308,7 @@ export class ShareModal extends Modal {
 		let index: number = 0;
 		for (const file of matches) {
 			let shareItem: SharedItem = this.plugin.settings.sharedItems.find(
-				(item) => item.path === file.path
+				(item) => item.path === file.path,
 			);
 			if (!shareItem) {
 				shareItem = {
@@ -327,16 +333,16 @@ export class ShareModal extends Modal {
 			await joinChannel(
 				this.plugin.activeWriter,
 				shareItem.id,
-				this.plugin.settings.senderId
+				this.plugin.settings.senderId,
 			);
 			index++;
 		}
 		if (index !== matches.length) {
 			console.debug(
-				`[OPV] Only synced ${index} out of ${matches.length} files for group ${id}.`
+				`[OPV] Only synced ${index} out of ${matches.length} files for group ${id}.`,
 			);
 			new Notice(
-				`Something went wrong while adding sync group ${id}. Check console for details.`
+				`Something went wrong while adding sync group ${id}. Check console for details.`,
 			);
 			return {
 				code: -1,
@@ -346,7 +352,7 @@ export class ShareModal extends Modal {
 		await joinChannel(
 			this.plugin.activeWriter,
 			id,
-			this.plugin.settings.senderId
+			this.plugin.settings.senderId,
 		);
 		console.debug(`[OPV] Joined channel ${id} after creating group`);
 		group.id = id;

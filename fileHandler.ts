@@ -7,7 +7,6 @@ function generateFileId(): string {
 }
 
 //TODO: Add progress indication
-//TODO: Implement handling folders
 export async function sendFileChunked(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channel: string,
@@ -159,7 +158,6 @@ export async function receiveFile(
 		const incomingBytes = conversion(content);
 		const incomingBuffer = incomingBytes.buffer;
 
-		// Normalize inboxPath: ensure trailing slash if non-empty
 		let normalizedInbox = inboxPath.trim();
 		if (normalizedInbox && !normalizedInbox.endsWith("/")) {
 			normalizedInbox += "/";
@@ -170,7 +168,7 @@ export async function receiveFile(
 			const folderPath = normalizedInbox.slice(0, -1); // Remove trailing slash for folder check
 			const folder = app.vault.getAbstractFileByPath(folderPath);
 			if (!folder && (folderPath != "")) {
-				console.debug(folderPath)
+				console.debug(`[OPV] Creating inbox folder at: ${folderPath}`);
 				await app.vault.createFolder(folderPath);
 			}
 		}
@@ -201,7 +199,6 @@ export async function receiveFile(
 		}
 
 		finalName = `${normalizedInbox}${finalName}`;
-		// Remove any leading slashes - Obsidian paths should not start with /
 		finalName = finalName.replace(/^\/+/, "");
 
 		console.debug(`[OPV] Saving as ${finalName}`);
@@ -223,3 +220,4 @@ export function conversion(base64: string): Uint8Array {
 	}
 	return bytes;
 }
+

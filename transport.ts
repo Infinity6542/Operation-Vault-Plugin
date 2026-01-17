@@ -329,7 +329,7 @@ async function handleIn(
 
 			if (
 				path &&
-				!plugin.settings.sharedItems.some((i) => i.path === message.channel_id)
+				!plugin.settings.sharedItems.some((i) => i.id === message.channel_id)
 			) {
 				const pin = plugin.activeDownloads.get(message.channel_id) || "";
 

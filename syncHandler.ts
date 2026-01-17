@@ -336,5 +336,7 @@ export class SyncHandler {
 				`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`
 			);
 		}
+		new Notice(`Removed sync group ${group.id}.`);
 	}
 }
+

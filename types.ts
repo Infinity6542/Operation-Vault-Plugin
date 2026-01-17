@@ -88,3 +88,4 @@ export interface FolderMatch {
 	item: TFolder;
 	match: SearchResult;
 }
+

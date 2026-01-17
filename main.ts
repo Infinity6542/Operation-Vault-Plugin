@@ -512,3 +512,4 @@ export class DownloadModal extends Modal {
 		contentEl.empty();
 	}
 }
+

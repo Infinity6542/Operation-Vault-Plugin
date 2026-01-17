@@ -141,18 +141,20 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		);
 
 		this.registerEvent(
-			this.app.vault.on("rename", async (file, path) => {
+			this.app.vault.on("rename", async (file, oldPath) => {
 				if (!file || !(file instanceof TFile)) return;
 
 				const sharedItem = this.settings.sharedItems.find(
-					(item) => item.path === path
+					(item) => item.path === oldPath
 				);
 				if (!sharedItem) return;
 
 				await this.syncHandler.handleRename(file, sharedItem);
 				sharedItem.path = file.path;
 				await this.saveSettings();
-				console.debug(`[OPV] File moved or renamed: ${path} -> ${file.path}`);
+				console.debug(
+					`[OPV] File moved or renamed: ${oldPath} -> ${file.path}`
+				);
 			})
 		);
 

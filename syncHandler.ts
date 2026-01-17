@@ -190,8 +190,11 @@ export class SyncHandler {
 			// Always update the file on disk, even if editor is not open
 			const file = this.app.vault.getAbstractFileByPath(path);
 			if (file instanceof TFile) {
-				await this.app.vault.process(file, () => newContent);
-				console.debug(`[OPV] Saved file to disk: ${path}`);
+				const currentFileContent = await this.app.vault.read(file);
+				if (currentFileContent !== newContent) {
+					await this.app.vault.modify(file, newContent);
+					console.debug(`[OPV] Saved file to disk: ${path}`);
+				}
 			}
 		} catch (e) {
 			console.error(`[OPV] Error applying update to ${path}:`, e);

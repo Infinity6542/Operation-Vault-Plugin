@@ -42,3 +42,38 @@ export class FolderSelector extends AbstractInputSuggest<FolderMatch> {
 		this.close();
 	}
 }
+
+export class FileSelector extends AbstractInputSuggest<FileMatch> {
+	inputEl: HTMLInputElement;
+
+	constructor(app: App, inputEl: HTMLInputElement) {
+		super(app, inputEl);
+		this.inputEl = inputEl;
+	}
+
+	getSuggestions(query: string): FileMatch[] {
+		const searchFn = prepareFuzzySearch(query);
+		const files = this.app.vault.getFiles();
+		const results: FileMatch[] = [];
+
+		for (const file of files) {
+			const match = searchFn(file.path);
+			if (match) {
+				results.push({ item: file, match });
+			}
+		}
+
+		return results.sort((a, b) => b.match.score - a.match.score);
+	}
+
+	renderSuggestion(value: FileMatch, el: HTMLElement): void {
+		renderMatches(el, value.item.path, value.match.matches);
+	}
+
+	selectSuggestion(value: FileMatch): void {
+		this.inputEl.value = value.item.path;
+		this.inputEl.trigger("input");
+		this.close();
+	}
+}
+

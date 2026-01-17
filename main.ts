@@ -162,6 +162,30 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			}),
 		);
 
+		this.registerEvent(
+			this.app.vault.on("delete", async (file) => {
+				if (!file || !(file instanceof TFile)) return;
+
+				const sharedItemIndex = this.settings.sharedItems.findIndex(
+					(item) => item.path === file.path,
+				);
+				if (sharedItemIndex === -1) return;
+				await remove(
+					this.activeTransport,
+					this.settings.sharedItems[sharedItemIndex].id,
+					this.settings.senderId,
+				);
+				await leaveChannel(
+					this.activeWriter,
+					this.settings.sharedItems[sharedItemIndex].id,
+					this.settings.senderId,
+				);
+				this.settings.sharedItems.splice(sharedItemIndex, 1);
+				await this.saveSettings();
+				console.debug(`[OPV] File deleted: ${file.path}`);
+			}),
+		);
+
 		await this.tryConnect();
 	}
 

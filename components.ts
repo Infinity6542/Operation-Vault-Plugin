@@ -2,13 +2,8 @@ import {
 	AbstractInputSuggest,
 	App,
 	debounce,
-	debounce,
 	prepareFuzzySearch,
 	renderMatches,
-	Modal,
-	Notice,
-	TFile,
-	Setting,
 	Modal,
 	Notice,
 	TFile,
@@ -237,7 +232,6 @@ export class ShareModal extends Modal {
 				key: this.pin ? this.pin : "",
 				createdAt: Date.now(),
 				shares: 0,
-				owner: this.plugin.settings.senderId,
 			};
 			const uploadObject: UploadModal = {
 				file: file,
@@ -319,7 +313,6 @@ export class ShareModal extends Modal {
 					createdAt: Date.now(),
 					shares: 0,
 					groups: [id],
-					owner: this.plugin.settings.senderId,
 				};
 			} else {
 				if (!shareItem.groups) shareItem.groups = [];

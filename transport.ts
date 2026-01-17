@@ -242,23 +242,19 @@ async function handleIn(
 		console.error("[OPV] Invalid message", message);
 		return;
 	}
-	let context: string = "";
 	let key: string = "";
 	if (message.channel_id === plugin.settings.channelName) {
 		key = plugin.settings.encryptionKey;
-		context = "global";
 	} else {
 		const sharedItem = plugin.settings.sharedItems.find(
 			(i) => i.id === message.channel_id
 		);
 		if (sharedItem) {
 			key = sharedItem.pin || sharedItem.pin;
-			context = `sent`;
 		} else {
 			// No key found
 			if (plugin.activeDownloads.has(message.channel_id)) {
 				key = plugin.activeDownloads.get(message.channel_id) || "";
-				context = `downloaded`;
 			} else {
 				// console.debug(
 				// 	`[OPV] No key could be found for item ${message.channel_id}`
@@ -271,7 +267,6 @@ async function handleIn(
 	const decrypted = await decryptPacket(message.payload, key);
 	if (!decrypted) {
 		console.error("[OPV] Empty decrypted content", decrypted);
-		console.debug(context);
 		return;
 	}
 
@@ -330,7 +325,7 @@ async function handleIn(
 				plugin.settings.inboxPath
 			);
 			incomingFiles.delete(decrypted.fileId);
-			console.debug(`[OPV] Received file: ${decrypted.fileId}`);
+			console.debug(`[OPV] Received file: ${decrypted.fileId} at path: ${path as string}`);
 
 			if (
 				path &&

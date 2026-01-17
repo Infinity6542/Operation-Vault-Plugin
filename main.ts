@@ -317,7 +317,7 @@ class vaultSettingsTab extends PluginSettingTab {
 							await navigator.clipboard.writeText(item.id);
 							// eslint-disable-next-line obsidianmd/ui/sentence-case
 							new Notice("Share ID copied to clipboard.");
-						})
+						}),
 				);
 
 				new Setting(controlDiv).addButton((btn) =>
@@ -403,7 +403,7 @@ export class DownloadModal extends Modal {
 						.setPlaceholder("share-group-1")
 						.onChange((value) => {
 							this.group = value;
-						})
+						}),
 				);
 		} else {
 			new Setting(contentEl)
@@ -417,7 +417,7 @@ export class DownloadModal extends Modal {
 						.setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
 						.onChange((value) => {
 							this.shareId = value;
-						})
+						}),
 				);
 		}
 
@@ -428,7 +428,7 @@ export class DownloadModal extends Modal {
 			.addText((text) =>
 				text.setPlaceholder("1234").onChange((value) => {
 					this.pin = value;
-				})
+				}),
 			);
 
 		new Setting(contentEl).addButton((btn) => {
@@ -452,7 +452,7 @@ export class DownloadModal extends Modal {
 			await joinChannel(
 				this.plugin.activeWriter,
 				this.group,
-				this.plugin.settings.senderId
+				this.plugin.settings.senderId,
 			);
 			//TODO: Figure out how to handle collisions with the server (names)
 			await sendSecureMessage(
@@ -460,7 +460,7 @@ export class DownloadModal extends Modal {
 				this.group,
 				this.plugin.settings.senderId,
 				transportPacket,
-				this.pin
+				this.pin,
 			);
 			console.debug(`[OPV] Requested group info for group: ${this.group}`);
 		} else {
@@ -484,4 +484,3 @@ export class DownloadModal extends Modal {
 		contentEl.empty();
 	}
 }
-

@@ -335,12 +335,22 @@ class vaultSettingsTab extends PluginSettingTab {
 							await remove(
 								this.plugin.activeTransport,
 								item.id,
-								this.plugin.settings.senderId
+								this.plugin.settings.senderId,
 							);
-							this.plugin.settings.sharedItems.splice(index, 1);
+							await leaveChannel(
+								this.plugin.activeWriter,
+								item.id,
+								this.plugin.settings.senderId,
+							);
+							const actualIndex = this.plugin.settings.sharedItems.findIndex(
+								(i) => i.id === item.id,
+							);
+							if (actualIndex !== -1) {
+								this.plugin.settings.sharedItems.splice(actualIndex, 1);
+							}
 							await this.plugin.saveSettings();
 							this.display();
-						})
+						}),
 				);
 			});
 		}

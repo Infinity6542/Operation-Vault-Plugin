@@ -159,7 +159,6 @@ export async function receiveFile(
 		const incomingBytes = conversion(content);
 		const incomingBuffer = incomingBytes.buffer;
 
-		// Normalize inboxPath: ensure trailing slash if non-empty
 		let normalizedInbox = inboxPath.trim();
 		if (normalizedInbox && !normalizedInbox.endsWith("/")) {
 			normalizedInbox += "/";
@@ -201,6 +200,7 @@ export async function receiveFile(
 		}
 
 		finalName = `${normalizedInbox}${finalName}`;
+		finalName = finalName.replace(/^\/+/, "");
 
 		console.debug(`[OPV] Saving as ${finalName}`);
 		await app.vault.createBinary(finalName, incomingBuffer as ArrayBuffer);

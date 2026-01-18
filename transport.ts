@@ -729,10 +729,8 @@ export async function remove(plugin: IOpVaultPlugin, shareId: string) {
 			plugin.settings.sharedItems.find((i) => i.id === shareId).path,
 		);
 		if (file instanceof TFile) {
-			await plugin.app.fileManager.trashFile(
-				plugin.app.vault.getAbstractFileByPath(
+			await plugin.app.vault.adapter.remove(
 					plugin.syncHandler.getStatePath(file),
-				),
 			);
 		}
 

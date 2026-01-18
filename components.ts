@@ -304,6 +304,7 @@ export class ShareModal extends Modal {
 			let shareItem: SharedItem = this.plugin.settings.sharedItems.find(
 				(item) => item.path === file.path,
 			);
+			//TODO: Consider if I should just make a new SharedItem for this entirely.
 			if (!shareItem) {
 				shareItem = {
 					id: generateUUID(),

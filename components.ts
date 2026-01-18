@@ -314,12 +314,11 @@ export class ShareModal extends Modal {
 					shares: 0,
 					groups: [id],
 				};
+				this.plugin.settings.sharedItems.push(shareItem);
 			} else {
 				if (!shareItem.groups) shareItem.groups = [];
 				shareItem.groups.push(id);
 			}
-
-			this.plugin.settings.sharedItems.push(shareItem);
 			await this.plugin.saveSettings();
 
 			group.files.push(shareItem);

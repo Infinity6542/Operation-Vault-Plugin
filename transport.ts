@@ -20,7 +20,7 @@ import type {
 
 const incomingFiles = new Map<string, Uint8Array[]>();
 
-export async function connectToServer(
+export async function connect(
 	url: string,
 	channelID: string,
 	plugin: IOpVaultPlugin

@@ -10,7 +10,7 @@ import {
 	TFile,
 } from "obsidian";
 import {
-	connectToServer,
+	connect,
 	requestFile,
 	remove,
 	joinChannel,
@@ -204,7 +204,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			return;
 		}
 		try {
-			this.activeTransport = await connectToServer(
+			this.activeTransport = await connect(
 				this.settings.serverUrl,
 				this.settings.channelName,
 				this,

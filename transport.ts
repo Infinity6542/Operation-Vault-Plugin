@@ -698,11 +698,9 @@ export async function requestFile(
 	);
 }
 
-export async function remove(
-	transport: WebTransport | null,
-	shareId: string,
-	senderId: string,
-) {
+export async function remove(plugin: IOpVaultPlugin, shareId: string) {
+	const transport = plugin.activeTransport;
+	const senderId = plugin.settings.senderId;
 	if (!transport) return new Notice("No active connection.");
 
 	try {
@@ -712,6 +710,17 @@ export async function remove(
 		// In the future, read the response to make sure that the operation
 		// was successful.
 		// const reader = stream.readable.getReader();
+
+		const file = plugin.app.vault.getAbstractFileByPath(
+			plugin.settings.sharedItems.find((i) => i.id === shareId).path,
+		);
+		if (file instanceof TFile) {
+			await plugin.app.fileManager.trashFile(
+				plugin.app.vault.getAbstractFileByPath(
+					plugin.syncHandler.getStatePath(file),
+				),
+			);
+		}
 
 		const header =
 			JSON.stringify({

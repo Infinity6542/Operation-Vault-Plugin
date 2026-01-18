@@ -22,6 +22,7 @@ import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
 import type {
 	SharedItem,
+	SyncGroup,
 	PluginSettings,
 	IOpVaultPlugin,
 	InnerMessage,
@@ -192,6 +193,70 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				}
 				await this.saveSettings();
 				console.debug(`[OPV] File deleted: ${file.path}`);
+			}),
+		);
+
+		this.registerEvent(
+			this.app.metadataCache.on("changed", async (file) => {
+				if (!file || !(file instanceof TFile)) return;
+				const cache = this.app.metadataCache.getFileCache(file);
+				const frontmatter: unknown = cache?.frontmatter?.["sync-group"];
+				if (!frontmatter) return;
+
+				const fileGroups: string[] = [];
+				const trackingGroups = this.settings.syncGroups.filter((group) =>
+					group.files.some((f) => f.path === file.path),
+				);
+				if (Array.isArray(frontmatter)) {
+					frontmatter.forEach((g) => fileGroups.push(g as string));
+				} else if (typeof frontmatter === "string") {
+					const values = frontmatter.split(",").map((s) => s.trim());
+					values.forEach((g) => fileGroups.push(g));
+				} else {
+					console.debug(
+						`Unhandled type for sync-group frontmatter in ${
+							file.path
+						}: ${typeof frontmatter}`,
+					);
+				}
+
+				if (!this.activeWriter || !this.activeTransport) {
+					console.debug(
+						"[OPV] activeWriter or activeTransport (or both) is null. This is likely due to the lack of a server connection.",
+					);
+					return;
+				}
+
+				for (const group of trackingGroups) {
+					if (Array.isArray(frontmatter)) {
+						if (!fileGroups.includes(group.id)) {
+							group.files = group.files.filter((f) => f.path !== file.path);
+							if (group.files.length === 0) {
+								await this.syncHandler.removeSyncGroup(group);
+								continue;
+							}
+						}
+					}
+				}
+
+				for (const group of fileGroups) {
+					if (!this.settings.syncGroups.some((g) => g.id === group)) continue;
+					const syncGroup: SyncGroup = this.settings.syncGroups.find(
+						(g) => g.id === group,
+					);
+					let shareItem = {
+						id: generateUUID(),
+						path: file.path,
+						pin: syncGroup?.pin ? syncGroup.pin : undefined,
+						key: syncGroup?.pin ? syncGroup.pin : "",
+						createdAt: Date.now(),
+						shares: 0,
+					};
+					this.settings.sharedItems.push(shareItem);
+					syncGroup.files.push(shareItem);
+					await this.saveSettings();
+					await joinChannel(this.activeWriter, group, this.settings.senderId);
+				}
 			}),
 		);
 

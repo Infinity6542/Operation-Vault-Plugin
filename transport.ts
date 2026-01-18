@@ -112,8 +112,16 @@ export async function connect(
 
 		return transport;
 	} catch (e) {
-		console.error("Something went wrong", e);
-		new Notice("Something went wrong.");
+		switch (e) {
+			case "WebTransportError: Opening handshake failed.": {
+				console.debug(`[OPV] Server at ${url} is inaccessible. Retrying later...`);
+				new Notice(`Server is inaccessible. Retrying later...`);
+				break;
+			}
+			default:
+				console.error("Something went wrong", e);
+				new Notice("Something went wrong.");
+		}
 		return null;
 	}
 }
@@ -244,10 +252,20 @@ async function readLoop(
 			}
 		}
 	} catch (e) {
-		console.error(
-			"[OPV] Error reading from stream. It's probably closed, but just in case it isn't: ",
-			e
-		);
+		
+		switch (e) {
+			case "WebTransportError: Connection lost.": {
+				new Notice("Connection lost. Disconnecting...");
+				await disconnect(plugin);
+				plugin.heartbeatInterval = setInterval(() => void plugin.tryConnect(), 6000);
+				break;
+			}
+			default:
+				console.error(
+					"[OPV] Error reading from stream. It's probably closed, but just in case it isn't: ",
+					e
+				);
+		}
 	}
 }
 

@@ -180,11 +180,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 						(item) => item.path === file.path,
 					);
 					if (sharedItemIndex === -1) return;
-					await remove(
-						this.activeTransport,
-						this.settings.sharedItems[sharedItemIndex].id,
-						this.settings.senderId,
-					);
+					await remove(this, this.settings.sharedItems[sharedItemIndex].id);
 					await leaveChannel(
 						this.activeWriter,
 						this.settings.sharedItems[sharedItemIndex].id,
@@ -507,9 +503,8 @@ class vaultSettingsTab extends PluginSettingTab {
 							new Notice(`Revoking share for ${item.path}...`);
 							console.debug(`[OPV] Revoking share for ${item.path}...`);
 							await remove(
-								this.plugin.activeTransport,
+								this.plugin,
 								item.id,
-								this.plugin.settings.senderId,
 							);
 							await leaveChannel(
 								this.plugin.activeWriter,

@@ -102,30 +102,30 @@ export async function connect(
 						);
 					}
 				})(),
-				// .catch(async (e) => {
-				// 	new Notice("Connection lost. Disconnecting...");
-				// 	console.debug(`[OPV] Connection lost during heartbeat: ${e}`);
+			// .catch(async (e) => {
+			// 	new Notice("Connection lost. Disconnecting...");
+			// 	console.debug(`[OPV] Connection lost during heartbeat: ${e}`);
 
-				// 	if (plugin.activeTransport) {
-				// 		plugin.activeTransport.close();
-				// 		plugin.activeTransport = null;
-				// 	}
-				// 	if (plugin.activeWriter) {
-				// 		await plugin.activeWriter.close();
-				// 		plugin.activeWriter = null;
-				// 	}
-				// 	if (plugin.heartbeatInterval) {
-				// 		clearInterval(plugin.heartbeatInterval);
-				// 		plugin.heartbeatInterval = null;
-				// 	}
-				// 	plugin.updatePresence(0);
+			// 	if (plugin.activeTransport) {
+			// 		plugin.activeTransport.close();
+			// 		plugin.activeTransport = null;
+			// 	}
+			// 	if (plugin.activeWriter) {
+			// 		await plugin.activeWriter.close();
+			// 		plugin.activeWriter = null;
+			// 	}
+			// 	if (plugin.heartbeatInterval) {
+			// 		clearInterval(plugin.heartbeatInterval);
+			// 		plugin.heartbeatInterval = null;
+			// 	}
+			// 	plugin.updatePresence(0);
 
-				// 	plugin.heartbeatInterval = setInterval(() => {
-				// 		plugin.tryConnect().catch((err) => {
-				// 			console.error("[OPV] Reconnect attempt failed:", err);
-				// 		});
-				// 	}, 6000);
-				// }),
+			// 	plugin.heartbeatInterval = setInterval(() => {
+			// 		plugin.tryConnect().catch((err) => {
+			// 			console.error("[OPV] Reconnect attempt failed:", err);
+			// 		});
+			// 	}, 6000);
+			// }),
 			10000,
 		);
 

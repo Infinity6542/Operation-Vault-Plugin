@@ -111,4 +111,3 @@ export interface opError {
 	// Message is optional if the code is 0.
 	message?: string;
 }
-

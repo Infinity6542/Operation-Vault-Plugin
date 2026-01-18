@@ -502,10 +502,7 @@ class vaultSettingsTab extends PluginSettingTab {
 							}
 							new Notice(`Revoking share for ${item.path}...`);
 							console.debug(`[OPV] Revoking share for ${item.path}...`);
-							await remove(
-								this.plugin,
-								item.id,
-							);
+							await remove(this.plugin, item.id);
 							await leaveChannel(
 								this.plugin.activeWriter,
 								item.id,

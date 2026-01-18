@@ -13,7 +13,7 @@ export async function sendFileChunked(
 	file: TFile,
 	app: App,
 	senderId: string,
-	key: string
+	key: string,
 ) {
 	// const channel = settings.channelName;
 	// const senderId = settings.senderId;
@@ -30,7 +30,7 @@ export async function sendFileChunked(
 		// new Notice(`Starting upload for ${file.name} (${totalBytes / 1024} KB).`);
 		const progress = new Notice(`Preparing ${file.name}...`, 300000);
 		console.debug(
-			`[OPV] Beginning to send ${file.name} (${totalBytes}:${totalChunks}).`
+			`[OPV] Beginning to send ${file.name} (${totalBytes}:${totalChunks}).`,
 		);
 
 		// Let server now file incoming
@@ -44,7 +44,7 @@ export async function sendFileChunked(
 				filename: file.name,
 				fileId: fileId,
 			},
-			key
+			key,
 		);
 
 		let offset: number = 0;
@@ -65,7 +65,7 @@ export async function sendFileChunked(
 					fileId: fileId,
 					chunkIndex: chunkIndex,
 				},
-				key
+				key,
 			);
 
 			offset += chunkSize;
@@ -74,7 +74,7 @@ export async function sendFileChunked(
 			// Update progress
 			const percentage = Math.floor((chunkIndex / totalChunks) * 100);
 			console.debug(
-				`[OPV] Sending ${file.name} (${chunkIndex}/${totalChunks}) - ${percentage}%`
+				`[OPV] Sending ${file.name} (${chunkIndex}/${totalChunks}) - ${percentage}%`,
 			);
 
 			if (percentage > lastPercent) {
@@ -96,7 +96,7 @@ export async function sendFileChunked(
 				fileId: fileId,
 				filename: file.name,
 			},
-			key
+			key,
 		);
 		console.debug(`[OPV] Finished sending ${file.name}.`);
 
@@ -131,7 +131,7 @@ export function nameFile(oName: string, duplicate?: boolean): string {
 			if (openParenIndex !== -1) {
 				const numberString = filename.substring(
 					openParenIndex + 2,
-					filename.length - 1
+					filename.length - 1,
 				);
 				const parsed = parseInt(numberString);
 				if (!isNaN(parsed)) {
@@ -167,7 +167,7 @@ export async function receiveFile(
 		if (normalizedInbox) {
 			const folderPath = normalizedInbox.slice(0, -1); // Remove trailing slash for folder check
 			const folder = app.vault.getAbstractFileByPath(folderPath);
-			if (!folder && (folderPath != "")) {
+			if (!folder && folderPath != "") {
 				console.debug(`[OPV] Creating inbox folder at: ${folderPath}`);
 				await app.vault.createFolder(folderPath);
 			}
@@ -220,4 +220,3 @@ export function conversion(base64: string): Uint8Array {
 	}
 	return bytes;
 }
-

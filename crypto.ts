@@ -6,7 +6,7 @@ const decoder = new TextDecoder();
 const SALT_LEN: number = 16;
 const IV_LEN: number = 12;
 const ITERATIONS: number = 100000;
-const KEY_LEN: number = 256
+const KEY_LEN: number = 256;
 
 async function getKey(password: string, salt: BufferSource) {
 	const keyMaterial = await window.crypto.subtle.importKey(
@@ -14,7 +14,7 @@ async function getKey(password: string, salt: BufferSource) {
 		encoder.encode(password),
 		{ name: "PBKDF2" },
 		false,
-		["deriveKey"]
+		["deriveKey"],
 	);
 
 	return window.crypto.subtle.deriveKey(
@@ -27,12 +27,15 @@ async function getKey(password: string, salt: BufferSource) {
 		keyMaterial,
 		{ name: "AES-GCM", length: KEY_LEN },
 		false,
-		["encrypt", "decrypt"]
+		["encrypt", "decrypt"],
 	);
 }
 
-export async function encryptPacket(data: InnerMessage, secret: string): Promise<string> {
-  const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
+export async function encryptPacket(
+	data: InnerMessage,
+	secret: string,
+): Promise<string> {
+	const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
 	const key = await getKey(secret, salt);
 	const iv = window.crypto.getRandomValues(new Uint8Array(IV_LEN));
 	const jsonStr = JSON.stringify(data);
@@ -43,11 +46,11 @@ export async function encryptPacket(data: InnerMessage, secret: string): Promise
 			iv: iv,
 		},
 		key,
-		encoder.encode(jsonStr)
+		encoder.encode(jsonStr),
 	);
 
 	const packageData = {
-    salt: arrayBufferToBase64(salt.buffer),
+		salt: arrayBufferToBase64(salt.buffer),
 		iv: arrayBufferToBase64(iv.buffer),
 		data: arrayBufferToBase64(encrypted),
 	};
@@ -55,15 +58,22 @@ export async function encryptPacket(data: InnerMessage, secret: string): Promise
 	return JSON.stringify(packageData);
 }
 
-export async function decryptPacket(payload: string, secret: string): Promise<InnerMessage | null> {
+export async function decryptPacket(
+	payload: string,
+	secret: string,
+): Promise<InnerMessage | null> {
 	try {
-		const pkg = JSON.parse(payload) as { salt: string; iv: string; data: string };
+		const pkg = JSON.parse(payload) as {
+			salt: string;
+			iv: string;
+			data: string;
+		};
 
 		if (!pkg.iv || !pkg.data || !pkg.salt) {
 			throw new Error("Invalid payload structure");
 		}
 
-    const salt = base64ToArrayBuffer(pkg.salt);
+		const salt = base64ToArrayBuffer(pkg.salt);
 		const iv = base64ToArrayBuffer(pkg.iv);
 		const key = await getKey(secret, new Uint8Array(salt));
 		const encryptedContent = base64ToArrayBuffer(pkg.data);
@@ -74,7 +84,7 @@ export async function decryptPacket(payload: string, secret: string): Promise<In
 				iv: iv,
 			},
 			key,
-			encryptedContent
+			encryptedContent,
 		);
 
 		const decryptedStr = decoder.decode(decryptedBytes);
@@ -87,10 +97,10 @@ export async function decryptPacket(payload: string, secret: string): Promise<In
 
 export async function encryptBinary(
 	data: ArrayBuffer,
-	keyStr: string
+	keyStr: string,
 ): Promise<Uint8Array> | null {
 	try {
-    const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
+		const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
 		const iv = window.crypto.getRandomValues(new Uint8Array(IV_LEN));
 		const key = await getKey(keyStr, salt);
 
@@ -100,12 +110,14 @@ export async function encryptBinary(
 				iv: iv,
 			},
 			key,
-			data
+			data,
 		);
 
-		const result = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
+		const result = new Uint8Array(
+			salt.byteLength + iv.byteLength + encrypted.byteLength,
+		);
 		result.set(salt, 0);
-    result.set(iv, salt.length)
+		result.set(iv, salt.length);
 		result.set(new Uint8Array(encrypted), iv.length + salt.length);
 
 		return result;
@@ -117,10 +129,10 @@ export async function encryptBinary(
 
 export async function decryptBinary(
 	data: Uint8Array,
-	keyStr: string
+	keyStr: string,
 ): Promise<Uint8Array> | null {
 	try {
-    const salt = data.slice(0, SALT_LEN);
+		const salt = data.slice(0, SALT_LEN);
 		const iv = data.slice(SALT_LEN, SALT_LEN + IV_LEN);
 		const encrypted = data.slice(SALT_LEN + IV_LEN);
 
@@ -131,7 +143,7 @@ export async function decryptBinary(
 				iv: iv,
 			},
 			key,
-			encrypted
+			encrypted,
 		);
 
 		return new Uint8Array(decrypted);
@@ -172,4 +184,3 @@ export async function getHash(input: ArrayBuffer): Promise<string> {
 
 	return hashHex;
 }
-

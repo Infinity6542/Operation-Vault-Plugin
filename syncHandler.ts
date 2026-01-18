@@ -29,7 +29,7 @@ export class SyncHandler {
 		if (openDocs.has(file.path)) return;
 
 		const sharedItem = this.plugin.settings.sharedItems.find(
-			(i) => i.path === file.path
+			(i) => i.path === file.path,
 		);
 		if (!sharedItem) {
 			console.error(`[OPV] No shared item found for path: ${file.path}`);
@@ -44,7 +44,9 @@ export class SyncHandler {
 		const stateLoaded = await this.loadYjsState(file, doc);
 
 		if (!stateLoaded) {
-			console.debug(`[OPV] No Yjs state found for ${file.path}, will initialize after sync`);
+			console.debug(
+				`[OPV] No Yjs state found for ${file.path}, will initialize after sync`,
+			);
 			this.triggerSaveState(file, doc);
 		} else {
 			console.debug(`[OPV] Loaded Yjs state for file: ${file.path}`);
@@ -70,7 +72,7 @@ export class SyncHandler {
 				if (view.file && view.file.path === file.path) {
 					this.handleLocalEdit(editor.getValue(), yText);
 				}
-			})
+			}),
 		);
 
 		new Notice(`Sync started for ${file.name}`);
@@ -117,7 +119,7 @@ export class SyncHandler {
 
 				await this.app.vault.adapter.writeBinary(
 					statePath,
-					state as unknown as ArrayBuffer
+					state as unknown as ArrayBuffer,
 				);
 				console.debug(`[OPV] Saved Yjs state for ${file.path}`);
 			})();
@@ -128,11 +130,11 @@ export class SyncHandler {
 
 	async handleSyncMessage(type: string, channelId: string, payload: string) {
 		const sharedItem = this.plugin.settings.sharedItems.find(
-			(i) => i.id === channelId
+			(i) => i.id === channelId,
 		);
 		if (!sharedItem) {
 			console.debug(
-				`[OPV] No shared item for channel: ${channelId}, ignoring ${type}`
+				`[OPV] No shared item for channel: ${channelId}, ignoring ${type}`,
 			);
 			return;
 		}
@@ -163,19 +165,26 @@ export class SyncHandler {
 						const content = await this.app.vault.read(file);
 						if (content.length > 0) {
 							// Use sender ID as tie-breaker to avoid race condition
-							const shouldInitialize = this.plugin.settings.senderId.localeCompare(sharedItem.id) < 0;
+							const shouldInitialize =
+								this.plugin.settings.senderId.localeCompare(sharedItem.id) < 0;
 							if (shouldInitialize) {
-								console.debug(`[OPV] Peer had no content, initializing from local file: ${path}`);
+								console.debug(
+									`[OPV] Peer had no content, initializing from local file: ${path}`,
+								);
 								doc.transact(() => {
 									yText.insert(0, content);
 								}, "local");
 								this.triggerSaveState(file, doc);
 							} else {
-								console.debug(`[OPV] Peer had no content, deferring initialization (tie-breaker)`);
+								console.debug(
+									`[OPV] Peer had no content, deferring initialization (tie-breaker)`,
+								);
 								// Wait for peer to initialize, or do it ourselves after timeout
 								setTimeout(() => {
 									if (yText.length === 0) {
-										console.debug(`[OPV] Peer didn't initialize, doing it ourselves: ${path}`);
+										console.debug(
+											`[OPV] Peer didn't initialize, doing it ourselves: ${path}`,
+										);
 										doc.transact(() => {
 											yText.insert(0, content);
 										}, "local");
@@ -215,7 +224,7 @@ export class SyncHandler {
 				const currentContent = editor.getValue();
 				if (currentContent === newContent) {
 					console.debug(
-						`[OPV] Content unchanged for ${path}, skipping editor update`
+						`[OPV] Content unchanged for ${path}, skipping editor update`,
 					);
 				} else {
 					console.debug(`[OPV] Updating editor content for ${path}`);
@@ -250,13 +259,13 @@ export class SyncHandler {
 	async sendSyncMessage(
 		path: string,
 		type: "sync_vector" | "sync_snapshot" | "sync_update",
-		payload: Uint8Array
+		payload: Uint8Array,
 	) {
 		const base64Payload = arrayBufferToBase64(payload.buffer as ArrayBuffer);
 		if (!this.plugin.activeWriter) return;
 
 		const sharedItem = this.plugin.settings.sharedItems.find(
-			(i) => i.path === path
+			(i) => i.path === path,
 		);
 		if (!sharedItem) {
 			console.error(`[OPV] No shared item found for path: ${path}`);
@@ -272,7 +281,7 @@ export class SyncHandler {
 				path: path,
 				syncPayload: base64Payload,
 			},
-			sharedItem.pin || ""
+			sharedItem.pin || "",
 		);
 	}
 
@@ -348,7 +357,7 @@ export class SyncHandler {
 		const oldFilename =
 			lastSlash !== -1 ? oldPath.substring(lastSlash + 1) : oldPath;
 		const oldStatePath = normalizePath(
-			`${oldFolder ? oldFolder + "/" : ""}.${oldFilename}.yjs`
+			`${oldFolder ? oldFolder + "/" : ""}.${oldFilename}.yjs`,
 		);
 		const newStatePath = this.getStatePath(file);
 
@@ -363,7 +372,7 @@ export class SyncHandler {
 				// No need to ensure directory exists as the new file is (hopefully) in that location
 				await this.app.vault.adapter.rename(oldStatePath, newStatePath);
 				console.debug(
-					`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`
+					`[OPV] Renamed Yjs state file from ${oldStatePath} to ${newStatePath}`,
 				);
 			} catch (e) {
 				console.error(`[OPV] Failed to rename Yjs state file:`, e);
@@ -383,23 +392,26 @@ export class SyncHandler {
 
 		for (const sItem of group.files) {
 			// Find the actual SharedItem in settings which has the correct local path
-			const localItem = this.plugin.settings.sharedItems.find(i => i.id === sItem.id);
+			const localItem = this.plugin.settings.sharedItems.find(
+				(i) => i.id === sItem.id,
+			);
 			if (!localItem) {
 				console.debug(`[OPV] Could not find SharedItem for ID ${sItem.id}`);
 				continue;
 			}
-			
+
 			const file = this.app.vault.getFileByPath(localItem.path);
 			if (!file) {
 				console.debug(`[OPV] Could not find file at path ${localItem.path}`);
 				// Still remove from settings even if file doesn't exist
-				this.plugin.settings.sharedItems = this.plugin.settings.sharedItems.filter(i => i.id !== sItem.id);
+				this.plugin.settings.sharedItems =
+					this.plugin.settings.sharedItems.filter((i) => i.id !== sItem.id);
 				await this.plugin.saveSettings();
-				group.files = group.files.filter(i => i.id !== sItem.id);
+				group.files = group.files.filter((i) => i.id !== sItem.id);
 				await leaveChannel(
 					this.plugin.activeWriter,
 					sItem.id,
-					this.plugin.settings.senderId
+					this.plugin.settings.senderId,
 				);
 				continue;
 			}
@@ -428,28 +440,30 @@ export class SyncHandler {
 							}
 						}
 					}
-				}
+				},
 			);
 
-			this.plugin.settings.sharedItems = this.plugin.settings.sharedItems.filter(i => i.id !== sItem.id);
+			this.plugin.settings.sharedItems =
+				this.plugin.settings.sharedItems.filter((i) => i.id !== sItem.id);
 			await this.plugin.saveSettings();
-			group.files = group.files.filter(i => i.id !== sItem.id);
+			group.files = group.files.filter((i) => i.id !== sItem.id);
 			await leaveChannel(
 				this.plugin.activeWriter,
 				sItem.id,
-				this.plugin.settings.senderId
+				this.plugin.settings.senderId,
 			);
 		}
 
 		if (group.files.length > 0) {
 			console.debug(
-				`[OPV] Could not remove all files from sync group ${group.id}.`
+				`[OPV] Could not remove all files from sync group ${group.id}.`,
 			);
 		}
 
-		this.plugin.settings.syncGroups = this.plugin.settings.syncGroups.filter(g => g.id !== group.id);
+		this.plugin.settings.syncGroups = this.plugin.settings.syncGroups.filter(
+			(g) => g.id !== group.id,
+		);
 		await this.plugin.saveSettings();
 		new Notice(`Removed sync group ${group.id}.`);
 	}
 }
-

@@ -70,63 +70,70 @@ export async function connect(
 			() =>
 				void (async () => {
 					if (writer) {
-						// Send heartbeat to main channel
-						const mainPacket = {
-							type: "heartbeat",
-							channel_id: channelID,
-							sender_id: plugin.settings.senderId,
-							payload: "ping",
-						};
-						await sendRawJSON(writer, mainPacket);
+						try {
+							// Send heartbeat to main channel
+							const mainPacket = {
+								type: "heartbeat",
+								channel_id: channelID,
+								sender_id: plugin.settings.senderId,
+								payload: "ping",
+							};
+							await sendRawJSON(writer, mainPacket);
 
-						// Send heartbeat to all file channels to keep them alive
-						for (const item of plugin.settings.sharedItems) {
-							const fileBeat = {
-								type: "heartbeat",
-								channel_id: item.id,
-								sender_id: plugin.settings.senderId,
-								payload: "ping",
-							};
-							await sendRawJSON(writer, fileBeat);
+							// Send heartbeat to all file channels to keep them alive
+							for (const item of plugin.settings.sharedItems) {
+								const fileBeat = {
+									type: "heartbeat",
+									channel_id: item.id,
+									sender_id: plugin.settings.senderId,
+									payload: "ping",
+								};
+								await sendRawJSON(writer, fileBeat);
+							}
+							for (const group of plugin.settings.syncGroups) {
+								const groupBeat = {
+									type: "heartbeat",
+									channel_id: group.id,
+									sender_id: plugin.settings.senderId,
+									payload: "ping",
+								};
+								await sendRawJSON(writer, groupBeat);
+							}
+							console.debug(
+								`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels).`,
+							);
+						} catch (e) {
+							new Notice("Connection lost. Disconnecting...");
+							console.debug(`[OPV] Connection lost during heartbeat: ${e}`);
+
+							if (plugin.activeTransport) {
+								plugin.activeTransport.close();
+								plugin.activeTransport = null;
+							}
+							if (plugin.activeWriter) {
+								try {
+									await plugin.activeWriter.close();
+								} catch (writerError) {
+									console.debug(
+										`[OPV] Error closing writer: ${writerError} (this is expected if connection is lost)`,
+									);
+								}
+								plugin.activeWriter = null;
+							}
+							if (plugin.heartbeatInterval) {
+								clearInterval(plugin.heartbeatInterval);
+								plugin.heartbeatInterval = null;
+							}
+							plugin.updatePresence(0);
+
+							plugin.heartbeatInterval = setInterval(() => {
+								plugin.tryConnect().catch((err) => {
+									console.error("[OPV] Reconnect attempt failed:", err);
+								});
+							}, 6000);
 						}
-						for (const group of plugin.settings.syncGroups) {
-							const groupBeat = {
-								type: "heartbeat",
-								channel_id: group.id,
-								sender_id: plugin.settings.senderId,
-								payload: "ping",
-							};
-							await sendRawJSON(writer, groupBeat);
-						}
-						console.debug(
-							`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels).`,
-						);
 					}
 				})(),
-			// .catch(async (e) => {
-			// 	new Notice("Connection lost. Disconnecting...");
-			// 	console.debug(`[OPV] Connection lost during heartbeat: ${e}`);
-
-			// 	if (plugin.activeTransport) {
-			// 		plugin.activeTransport.close();
-			// 		plugin.activeTransport = null;
-			// 	}
-			// 	if (plugin.activeWriter) {
-			// 		await plugin.activeWriter.close();
-			// 		plugin.activeWriter = null;
-			// 	}
-			// 	if (plugin.heartbeatInterval) {
-			// 		clearInterval(plugin.heartbeatInterval);
-			// 		plugin.heartbeatInterval = null;
-			// 	}
-			// 	plugin.updatePresence(0);
-
-			// 	plugin.heartbeatInterval = setInterval(() => {
-			// 		plugin.tryConnect().catch((err) => {
-			// 			console.error("[OPV] Reconnect attempt failed:", err);
-			// 		});
-			// 	}, 6000);
-			// }),
 			10000,
 		);
 

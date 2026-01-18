@@ -19,6 +19,7 @@ import type {
 } from "./types";
 
 const incomingFiles = new Map<string, Uint8Array[]>();
+let noticeDebounce: ReturnType<typeof setTimeout> | null = null;
 
 export async function connect(
 	url: string,
@@ -262,13 +263,19 @@ async function readLoop(
 				try {
 					const message = JSON.parse(chunk) as TransportPacket;
 
-					if (message.type === "user_list") {
+					if (message.type === "user_list" && message.channel_id === plugin.settings.channelName) {
 						try {
 							const users = JSON.parse(message.payload) as string[];
 							plugin.onlineUsers = users;
 							plugin.updatePresence(users.length);
 							console.debug("[OPV] Current users in channel:", users);
-							new Notice(`Currently online: ${users.length}`);
+							if (noticeDebounce) {
+								clearTimeout(noticeDebounce);
+							}
+							noticeDebounce = setTimeout(() => {
+								new Notice(`Currently online: ${users.length}`);
+								noticeDebounce = null;
+							}, 500);
 						} catch (e) {
 							console.error("[OPV] Error parsing user list", e);
 						}

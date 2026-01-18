@@ -13,6 +13,7 @@ export interface IOpVaultPlugin {
 	updatePresence(count: number): void;
 	saveSettings(): Promise<void>;
 	registerEvent(event: EventRef): void;
+	tryConnect(): Promise<void>;
 }
 
 export interface InnerMessage {

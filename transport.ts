@@ -65,50 +65,69 @@ export async function connect(
 
 		void readLoop(reader, app, plugin, writer);
 
-		plugin.heartbeatInterval = setInterval(() => {
-			if (writer) {
-				// Send heartbeat to main channel
-				const mainPacket = {
-					type: "heartbeat",
-					channel_id: channelID,
-					sender_id: plugin.settings.senderId,
-					payload: "ping",
-				};
-				void sendRawJSON(writer, mainPacket);
+		plugin.heartbeatInterval = setInterval(
+			() =>
+				void (async () => {
+					if (writer) {
+						// Send heartbeat to main channel
+						const mainPacket = {
+							type: "heartbeat",
+							channel_id: channelID,
+							sender_id: plugin.settings.senderId,
+							payload: "ping",
+						};
+						await sendRawJSON(writer, mainPacket);
 
-				// Send heartbeat to all file channels to keep them alive
-				for (const item of plugin.settings.sharedItems) {
-					const filePacket = {
-						type: "heartbeat",
-						channel_id: item.id,
-						sender_id: plugin.settings.senderId,
-						payload: "ping",
-					};
-					void sendRawJSON(writer, filePacket);
-				}
-				for (const group of plugin.settings.syncGroups) {
-					const filePacket = {
-						type: "heartbeat",
-						channel_id: group.id,
-						sender_id: plugin.settings.senderId,
-						payload: "ping",
-					};
-					void sendRawJSON(writer, filePacket);
-				}
-				for (const group of plugin.settings.syncGroups) {
-					const filePacket = {
-						type: "heartbeat",
-						channel_id: group.id,
-						sender_id: plugin.settings.senderId,
-						payload: "ping",
-					};
-					void sendRawJSON(writer, filePacket);
-				}
-				console.debug(
-					`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels).`,
-				);
-			}
-		}, 10000);
+						// Send heartbeat to all file channels to keep them alive
+						for (const item of plugin.settings.sharedItems) {
+							const fileBeat = {
+								type: "heartbeat",
+								channel_id: item.id,
+								sender_id: plugin.settings.senderId,
+								payload: "ping",
+							};
+							await sendRawJSON(writer, fileBeat);
+						}
+						for (const group of plugin.settings.syncGroups) {
+							const groupBeat = {
+								type: "heartbeat",
+								channel_id: group.id,
+								sender_id: plugin.settings.senderId,
+								payload: "ping",
+							};
+							await sendRawJSON(writer, groupBeat);
+						}
+						console.debug(
+							`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels).`,
+						);
+					}
+				})(),
+				// .catch(async (e) => {
+				// 	new Notice("Connection lost. Disconnecting...");
+				// 	console.debug(`[OPV] Connection lost during heartbeat: ${e}`);
+
+				// 	if (plugin.activeTransport) {
+				// 		plugin.activeTransport.close();
+				// 		plugin.activeTransport = null;
+				// 	}
+				// 	if (plugin.activeWriter) {
+				// 		await plugin.activeWriter.close();
+				// 		plugin.activeWriter = null;
+				// 	}
+				// 	if (plugin.heartbeatInterval) {
+				// 		clearInterval(plugin.heartbeatInterval);
+				// 		plugin.heartbeatInterval = null;
+				// 	}
+				// 	plugin.updatePresence(0);
+
+				// 	plugin.heartbeatInterval = setInterval(() => {
+				// 		plugin.tryConnect().catch((err) => {
+				// 			console.error("[OPV] Reconnect attempt failed:", err);
+				// 		});
+				// 	}, 6000);
+				// }),
+			10000,
+		);
 
 		return transport;
 	} catch (e) {
@@ -187,9 +206,20 @@ export async function sendRawJSON(
 		| TransportPacket
 		| { type: string; channel_id: string; sender_id: string; payload: string },
 ) {
-	console.debug("[DBG] [OPV] Sending JSON:", JSON.stringify(data));
-	const encoder = new TextEncoder();
-	await writer.write(encoder.encode(JSON.stringify(data) + "\n"));
+	try {
+		console.debug("[DBG] [OPV] Sending JSON:", JSON.stringify(data));
+		const encoder = new TextEncoder();
+		await writer.write(encoder.encode(JSON.stringify(data) + "\n"));
+	} catch (e) {
+		const errorStr = String(e);
+		if (errorStr.includes("aborted") || errorStr.includes("closed")) {
+			console.debug("[OPV] Cannot send message, connection is closed");
+			throw e;
+		} else {
+			console.error("[OPV] Error sending message:", e);
+			throw e;
+		}
+	}
 }
 
 // Legacy
@@ -254,22 +284,10 @@ async function readLoop(
 			}
 		}
 	} catch (e) {
-		switch (e) {
-			case "WebTransportError: Connection lost.": {
-				new Notice("Connection lost. Disconnecting...");
-				await disconnect(plugin);
-				plugin.heartbeatInterval = setInterval(
-					() => void plugin.tryConnect(),
-					6000,
-				);
-				break;
-			}
-			default:
-				console.error(
-					"[OPV] Error reading from stream. It's probably closed, but just in case it isn't: ",
-					e,
-				);
-		}
+		console.error(
+			"[OPV] Error reading from stream. It's probably closed, but just in case it isn't:",
+			e,
+		);
 	}
 }
 

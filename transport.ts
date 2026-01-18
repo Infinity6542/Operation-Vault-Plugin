@@ -108,7 +108,7 @@ export async function connect(
 					`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels + ${plugin.settings.syncGroups.length} group channels).`
 				);
 			}
-		}, 10000) as unknown as ReturnType<typeof setTimeout>;
+		}, 10000);
 
 		return transport;
 	} catch (e) {

@@ -270,19 +270,23 @@ async function readLoop(
 				try {
 					const message = JSON.parse(chunk) as TransportPacket;
 
-					if (message.type === "user_list" && message.channel_id === plugin.settings.channelName) {
+					if (message.type === "user_list") {
 						try {
 							const users = JSON.parse(message.payload) as string[];
-							plugin.onlineUsers = users;
-							plugin.updatePresence(users.length);
-							console.debug("[OPV] Current users in channel:", users);
-							if (noticeDebounce) {
-								clearTimeout(noticeDebounce);
+							if (message.channel_id === plugin.settings.channelName) {
+								plugin.onlineUsers = users;
+								plugin.updatePresence(users.length);
+								console.debug("[OPV] Current users in channel:", users);
+								if (noticeDebounce) {
+									clearTimeout(noticeDebounce);
+								}
+								noticeDebounce = setTimeout(() => {
+									new Notice(`Currently online: ${users.length}`);
+									noticeDebounce = null;
+								}, 500);
+							} else {
+								console.debug(`[OPV] Users in channel ${message.channel_id}:`, users);
 							}
-							noticeDebounce = setTimeout(() => {
-								new Notice(`Currently online: ${users.length}`);
-								noticeDebounce = null;
-							}, 500);
 						} catch (e) {
 							console.error("[OPV] Error parsing user list", e);
 						}

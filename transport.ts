@@ -4,7 +4,7 @@ import {
 	decryptPacket,
 	arrayBufferToBase64,
 	encryptBinary,
-		// 	decryptBinary,
+	// 	decryptBinary,
 } from "./crypto";
 import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {
@@ -23,7 +23,7 @@ const incomingFiles = new Map<string, Uint8Array[]>();
 export async function connect(
 	url: string,
 	channelID: string,
-	plugin: IOpVaultPlugin
+	plugin: IOpVaultPlugin,
 ): Promise<WebTransport | null> {
 	const senderId = plugin.settings.senderId;
 	const app = plugin.app;
@@ -105,7 +105,7 @@ export async function connect(
 					void sendRawJSON(writer, filePacket);
 				}
 				console.debug(
-					`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels + ${plugin.settings.syncGroups.length} group channels).`
+					`[OPV] Sent heartbeat pings (main + ${plugin.settings.sharedItems.length} file channels + ${plugin.settings.syncGroups.length} group channels).`,
 				);
 			}
 		}, 10000);
@@ -114,7 +114,9 @@ export async function connect(
 	} catch (e) {
 		switch (e) {
 			case "WebTransportError: Opening handshake failed.": {
-				console.debug(`[OPV] Server at ${url} is inaccessible. Retrying later...`);
+				console.debug(
+					`[OPV] Server at ${url} is inaccessible. Retrying later...`,
+				);
 				new Notice(`Server is inaccessible. Retrying later...`);
 				break;
 			}
@@ -165,7 +167,7 @@ export async function sendSecureMessage(
 	channelId: string,
 	senderId: string,
 	innerData: InnerMessage,
-	key: string
+	key: string,
 ) {
 	const encryptedPayload = await encryptPacket(innerData, key);
 
@@ -183,7 +185,7 @@ export async function sendRawJSON(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	data:
 		| TransportPacket
-		| { type: string; channel_id: string; sender_id: string; payload: string }
+		| { type: string; channel_id: string; sender_id: string; payload: string },
 ) {
 	console.debug("[DBG] [OPV] Sending JSON:", JSON.stringify(data));
 	const encoder = new TextEncoder();
@@ -196,7 +198,7 @@ export async function sendRawJSON(
 //   const encoder = new TextEncoder();
 //  const data = encoder.encode(jsonString);
 //  await writer.write(data);
-//}
+// }
 
 // key: string
 // is not currently used and has been removed
@@ -204,7 +206,7 @@ async function readLoop(
 	reader: ReadableStreamDefaultReader<Uint8Array>,
 	app: App,
 	plugin: IOpVaultPlugin,
-	writer: WritableStreamDefaultWriter<Uint8Array>
+	writer: WritableStreamDefaultWriter<Uint8Array>,
 ) {
 	const decoder = new TextDecoder();
 	let buffer = "";
@@ -252,18 +254,20 @@ async function readLoop(
 			}
 		}
 	} catch (e) {
-		
 		switch (e) {
 			case "WebTransportError: Connection lost.": {
 				new Notice("Connection lost. Disconnecting...");
 				await disconnect(plugin);
-				plugin.heartbeatInterval = setInterval(() => void plugin.tryConnect(), 6000);
+				plugin.heartbeatInterval = setInterval(
+					() => void plugin.tryConnect(),
+					6000,
+				);
 				break;
 			}
 			default:
 				console.error(
 					"[OPV] Error reading from stream. It's probably closed, but just in case it isn't: ",
-					e
+					e,
 				);
 		}
 	}
@@ -273,7 +277,7 @@ async function handleIn(
 	message: TransportPacket,
 	app: App,
 	plugin: IOpVaultPlugin,
-	writer: WritableStreamDefaultWriter<Uint8Array>
+	writer: WritableStreamDefaultWriter<Uint8Array>,
 ) {
 	if (message.type !== "message" || !message.payload) {
 		console.error("[OPV] Invalid message", message);
@@ -281,10 +285,10 @@ async function handleIn(
 	}
 	let key: string = "";
 	const sharedItem = plugin.settings.sharedItems.find(
-		(i) => i.id === message.channel_id
+		(i) => i.id === message.channel_id,
 	);
 	const groupItem = plugin.settings.syncGroups.find(
-		(g) => g.id === message.channel_id
+		(g) => g.id === message.channel_id,
 	);
 	if (message.channel_id === plugin.settings.channelName) {
 		key = plugin.settings.encryptionKey;
@@ -315,7 +319,7 @@ async function handleIn(
 			// Ignore missing fileId for now
 			incomingFiles.set(decrypted.fileId, []);
 			console.debug(
-				`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`
+				`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`,
 			);
 			break;
 		case "file_chunk": {
@@ -327,7 +331,7 @@ async function handleIn(
 			const chunkBytes = conversion(decrypted.content);
 			incomingFiles.get(decrypted.fileId)?.push(chunkBytes);
 			console.debug(
-				`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`
+				`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`,
 			);
 			break;
 		}
@@ -356,10 +360,12 @@ async function handleIn(
 				app,
 				decrypted.filename || "unnamed",
 				base64String,
-				plugin.settings.inboxPath
+				plugin.settings.inboxPath,
 			);
 			incomingFiles.delete(decrypted.fileId);
-			console.debug(`[OPV] Received file: ${decrypted.fileId} at path: ${path as string} at path: ${path as string}`);
+			console.debug(
+				`[OPV] Received file: ${decrypted.fileId} at path: ${path as string} at path: ${path as string}`,
+			);
 
 			if (
 				path &&
@@ -378,16 +384,23 @@ async function handleIn(
 
 				plugin.settings.sharedItems.push(item);
 				await plugin.saveSettings();
-				console.debug(`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`);
-				console.debug(`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`);
+				console.debug(
+					`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`,
+				);
+				console.debug(
+					`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`,
+				);
 
 				plugin.activeDownloads.delete(message.channel_id);
 
 				const tFile = app.vault.getAbstractFileByPath(path);
 				if (tFile instanceof TFile) {
 					await plugin.syncHandler.startSync(tFile);
-				} } else if (path) {
-				console.debug(`[OPV] SharedItem already exists for channel: ${message.channel_id}`);
+				}
+			} else if (path) {
+				console.debug(
+					`[OPV] SharedItem already exists for channel: ${message.channel_id}`,
+				);
 			} else {
 				console.warn(`[OPV] Failed to save file, path is: ${path as string}`);
 			}
@@ -397,12 +410,12 @@ async function handleIn(
 			console.debug(`[OPV] Download request for: ${decrypted.shareId}`);
 
 			const shareItem = plugin.settings.sharedItems.find(
-				(i: SharedItem) => i.id === decrypted.shareId
+				(i: SharedItem) => i.id === decrypted.shareId,
 			);
 
 			if (!shareItem) {
 				console.error(
-					`[OPV] No shared item found for ID: ${decrypted.shareId}`
+					`[OPV] No shared item found for ID: ${decrypted.shareId}`,
 				);
 				break;
 			}
@@ -412,7 +425,7 @@ async function handleIn(
 
 			if (expectedPin !== incomingPin) {
 				console.error(
-					`[OPV] Invalid PIN for download request of share ID: ${decrypted.shareId}`
+					`[OPV] Invalid PIN for download request of share ID: ${decrypted.shareId}`,
 				);
 				break;
 			}
@@ -428,7 +441,7 @@ async function handleIn(
 					fileToSend,
 					app,
 					plugin.settings.senderId,
-					shareItem.pin || ""
+					shareItem.pin || "",
 				);
 				shareItem.shares++;
 				void plugin.saveSettings();
@@ -468,7 +481,7 @@ async function handleIn(
 					plugin.settings.channelName,
 					plugin.settings.senderId,
 					req,
-					key
+					key,
 				);
 			}
 			break;
@@ -499,7 +512,7 @@ async function handleIn(
 						plugin.settings.channelName,
 						plugin.settings.senderId,
 						updateMessage,
-						key
+						key,
 					);
 				}
 			}
@@ -519,7 +532,7 @@ async function handleIn(
 				await plugin.syncHandler.handleSyncMessage(
 					decrypted.type,
 					message.channel_id,
-					decrypted.syncPayload
+					decrypted.syncPayload,
 				);
 			}
 			break;
@@ -527,7 +540,7 @@ async function handleIn(
 		case "get_group": {
 			if (decrypted.content) {
 				const group = plugin.settings.syncGroups.find(
-					(g) => g.id === decrypted.content
+					(g) => g.id === decrypted.content,
 				);
 				if (!group) break;
 				const response: InnerMessage = {
@@ -539,7 +552,7 @@ async function handleIn(
 					message.channel_id,
 					plugin.settings.senderId,
 					response,
-					key
+					key,
 				);
 			} else {
 				console.error("[OPV] get_group message missing content");
@@ -558,7 +571,7 @@ async function handleIn(
 				}
 
 				const existingGroup = plugin.settings.syncGroups.find(
-					(g) => g.id === group.id
+					(g) => g.id === group.id,
 				);
 				if (!existingGroup) {
 					plugin.settings.syncGroups.push(group);
@@ -595,7 +608,7 @@ async function handleIn(
 export async function upload(
 	modal: UploadModal,
 	shareId: string,
-	pin?: string
+	pin?: string,
 ) {
 	const file = modal.file;
 	const app = modal.app;
@@ -642,7 +655,7 @@ export async function upload(
 export async function requestFile(
 	shareId: string,
 	plugin: IOpVaultPlugin,
-	pin?: string
+	pin?: string,
 ) {
 	if (!plugin.activeWriter) {
 		new Notice("No active connection for download.");
@@ -663,14 +676,14 @@ export async function requestFile(
 			shareId: shareId,
 			pin: pin || "",
 		},
-		pin || ""
+		pin || "",
 	);
 }
 
 export async function remove(
 	transport: WebTransport | null,
 	shareId: string,
-	senderId: string
+	senderId: string,
 ) {
 	if (!transport) return new Notice("No active connection.");
 
@@ -696,7 +709,7 @@ export async function remove(
 	} catch (e) {
 		console.error("Error during delete request", e);
 		new Notice(
-			"Error during delete request. Check the console for more information."
+			"Error during delete request. Check the console for more information.",
 		);
 	}
 }
@@ -704,7 +717,7 @@ export async function remove(
 export async function joinChannel(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channelId: string,
-	senderId: string
+	senderId: string,
 ) {
 	const packet: TransportPacket = {
 		type: "join",
@@ -719,7 +732,7 @@ export async function joinChannel(
 export async function leaveChannel(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channelId: string,
-	senderId: string
+	senderId: string,
 ) {
 	const packet: TransportPacket = {
 		type: "leave",
@@ -730,4 +743,3 @@ export async function leaveChannel(
 	await sendRawJSON(writer, packet);
 	console.debug(`[OPV] Left transfer channel ${channelId}`);
 }
-

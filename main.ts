@@ -131,15 +131,17 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			this.app.workspace.on("file-open", async (file) => {
 				if (!file) return;
 
-				const shared = this.settings.sharedItems.some(
+				const shareObjects = this.settings.sharedItems.filter(
 					(item) => item.path === file.path,
 				);
 
-				if (shared) {
-					console.debug(`[OPV] File opened is shared: ${file.path}`);
+				for (let i = 0; i < shareObjects.length; i++) {
+					console.debug(
+						`[OPV] File opened is shared: ${file.path} (${i + 1}/${
+							shareObjects.length
+						})`,
+					);
 					await this.syncHandler.startSync(file);
-				} else {
-					console.debug(`[OPV] File opened is not shared: ${file.path}`);
 				}
 			}),
 		);
@@ -149,14 +151,15 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				if (!file || !(file instanceof TFile)) return;
 
 				// Find the shared item by the old path (before rename)
-				const sharedItem = this.settings.sharedItems.find(
+				const sharedItem = this.settings.sharedItems.filter(
 					(item) => item.path === oldPath,
 				);
 				if (!sharedItem) return;
-
-				await this.syncHandler.handleRename(file, sharedItem);
-				sharedItem.path = file.path;
-				await this.saveSettings();
+				for (const item of sharedItem) {
+					await this.syncHandler.handleRename(file, item);
+					item.path = file.path;
+					await this.saveSettings();
+				}
 				console.debug(
 					`[OPV] File moved or renamed: ${oldPath} -> ${file.path}`,
 				);
@@ -166,32 +169,39 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.registerEvent(
 			this.app.vault.on("delete", async (file) => {
 				if (!file || !(file instanceof TFile)) return;
-
-				const sharedItemIndex = this.settings.sharedItems.findIndex(
-					(item) => item.path === file.path,
-				);
-				if (sharedItemIndex === -1) return;
-				await remove(
-					this.activeTransport,
-					this.settings.sharedItems[sharedItemIndex].id,
-					this.settings.senderId,
-				);
-				await leaveChannel(
-					this.activeWriter,
-					this.settings.sharedItems[sharedItemIndex].id,
-					this.settings.senderId,
-				);
-				this.settings.sharedItems.splice(sharedItemIndex, 1);
-				const groups = this.settings.syncGroups.filter((group) =>
-					group.files.some((f) => f.path === file.path),
-				);
-				for (const group of groups) {
-					group.files = group.files.filter((f) => f.path !== file.path);
-					if (group.files.length === 0) {
-						await this.syncHandler.removeSyncGroup(group);
+				for (
+					let i = 0;
+					i <
+					this.settings.sharedItems.filter((item) => item.path === file.path)
+						.length;
+					i++
+				) {
+					const sharedItemIndex = this.settings.sharedItems.findIndex(
+						(item) => item.path === file.path,
+					);
+					if (sharedItemIndex === -1) return;
+					await remove(
+						this.activeTransport,
+						this.settings.sharedItems[sharedItemIndex].id,
+						this.settings.senderId,
+					);
+					await leaveChannel(
+						this.activeWriter,
+						this.settings.sharedItems[sharedItemIndex].id,
+						this.settings.senderId,
+					);
+					this.settings.sharedItems.splice(sharedItemIndex, 1);
+					const groups = this.settings.syncGroups.filter((group) =>
+						group.files.some((f) => f.path === file.path),
+					);
+					for (const group of groups) {
+						group.files = group.files.filter((f) => f.path !== file.path);
+						if (group.files.length === 0) {
+							await this.syncHandler.removeSyncGroup(group);
+						}
 					}
+					await this.saveSettings();
 				}
-				await this.saveSettings();
 				console.debug(`[OPV] File deleted: ${file.path}`);
 			}),
 		);

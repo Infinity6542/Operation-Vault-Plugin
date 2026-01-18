@@ -151,8 +151,7 @@ export class ShareModal extends Modal {
 					const debounceUpdate = debounce(saveAndValidate, 500);
 
 					text.setPlaceholder("/path/to/file.md");
-					text.setValue(this.activeFile ? this.activeFile.path : "");
-					text.setValue(this.item).onChange(async (value) => {
+					text.setValue(this.activeFile ? this.activeFile.path : "").onChange(async (value) => {
 						debounceUpdate(value);
 					});
 

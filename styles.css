@@ -3,7 +3,7 @@
     border-width: 2px !important;
 }
 
-.opv-remote-cursor {
+.opv-remote-label {
     position: absolute;
     font-size: 0.8em;
     padding: 2px 4px;
@@ -18,21 +18,21 @@
     white-space: nowrap;
 }
 
-.opv-remote-cursor.opv-align-right {
+.opv-remote-label.opv-align-right {
     translate: -100% 0;
     transform: translate(0, -100%);
     border-bottom-left-radius: 6px;
     border-bottom-right-radius: 0px;
 }
 
-.opv-remote-cursor:hover {
+.opv-remote-label:hover {
     translate: 0 0;
     transform: translate(0, 100%);
     border-top-left-radius: 0px;
     border-bottom-left-radius: 6px;
 }
 
-.opv-remote-cursor.opv-align-right:hover {
+.opv-remote-label.opv-align-right:hover {
     translate: -100% 0;
     transform: translate(0, 100%) !important;
     border-bottom-left-radius: 6px;

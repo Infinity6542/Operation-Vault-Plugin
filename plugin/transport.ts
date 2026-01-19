@@ -635,17 +635,17 @@ async function handleIn(
 			}
 			break;
 		}
-		// case "awareness": {
-		//   if (decrypted.path && decrypted.awarenessPayload) {
-		//    plugin.syncHandler.handleAwarenessUpdate(
-		//      decrypted.path,
-		//      decrypted.awarenessPayload,
-		//    );
-		//  } else {
-		//    console.error("[OPV] Invalid awareness message:", decrypted);
-		//  }
-		//  break;
-		// }
+		case "awareness": {
+			if (decrypted.path && decrypted.awarenessPayload) {
+				await plugin.syncHandler.handleAwarenessUpdate(
+					plugin.settings.sharedItems.find((i) => i.id === message.channel_id).path,
+					decrypted.awarenessPayload,
+				);
+			} else {
+				console.error("[OPV] Invalid awareness message:", decrypted);
+			}
+			break;
+		}
 		default:
 			console.error("[OPV] Unknown message type:", decrypted.type);
 	}
@@ -724,6 +724,12 @@ export async function requestFile(
 		},
 		pin || "",
 	);
+	// await sendRawJSON(plugin.activeWriter, {
+	// 	type: "download_request",
+	// 	channel_id: shareId,
+	// 	sender_id: plugin.settings.senderId,
+	// 	payload: shareId,
+	// });
 }
 
 export async function remove(plugin: IOpVaultPlugin, shareId: string) {

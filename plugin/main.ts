@@ -8,6 +8,7 @@ import {
 	Setting,
 	TFolder,
 	TFile,
+	MarkdownView,
 } from "obsidian";
 import {
 	connect,
@@ -20,7 +21,7 @@ import {
 	startHeartbeats,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
-import { SyncHandler } from "./syncHandler";
+import { SyncHandler, cursorPlugin } from "./syncHandler";
 import type {
 	SharedItem,
 	SyncGroup,
@@ -127,6 +128,8 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.addRibbonIcon("download", "Download shared item", async () => {
 			new DownloadModal(this.app, this).open();
 		});
+
+		this.registerEditorExtension(cursorPlugin(this.app));
 
 		this.registerEvent(
 			this.app.workspace.on("file-open", async (file) => {
@@ -267,6 +270,28 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			}),
 		);
 
+		this.registerDomEvent(document, "keyup", async (e: KeyboardEvent) => {
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			if (view && view.file) {
+				if (
+					this.settings.sharedItems.some((item) => item.path === view.file.path)
+				) {
+					this.syncHandler.updateLocalCursor(view.editor, view.file.path);
+				}
+			}
+		});
+
+		this.registerDomEvent(document, "mouseup", async (e: MouseEvent) => {
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			if (view && view.file) {
+				if (
+					this.settings.sharedItems.some((item) => item.path === view.file.path)
+				) {
+					this.syncHandler.updateLocalCursor(view.editor, view.file.path);
+				}
+			}
+		});
+
 		await this.tryConnect();
 	}
 
@@ -294,7 +319,11 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 						this.settings.senderId,
 					);
 				}
-				await startHeartbeats(this, this.activeWriter, this.settings.channelName);
+				await startHeartbeats(
+					this,
+					this.activeWriter,
+					this.settings.channelName,
+				);
 			}
 		} catch (e) {
 			console.error("[OPV] Connection to server failed:", e);
@@ -384,7 +413,7 @@ class vaultSettingsTab extends PluginSettingTab {
 				const validate = (path: string) => {
 					const file = this.app.vault.getAbstractFileByPath(path);
 					const isValid = file && file instanceof TFolder;
-					text.inputEl.toggleClass("resource-error-input", !isValid);
+					text.inputEl.toggleClass("opv-resource-error-input", !isValid);
 					text.inputEl.title = isValid ? "" : "Folder not found";
 				};
 
@@ -622,7 +651,7 @@ export class DownloadModal extends Modal {
 				this.group,
 				this.plugin.settings.senderId,
 			);
-			//TODO: Figure out how to handle collisions with the server (names)
+			//TODO: Figure out how to handle collisions with the server (group names)
 			await sendSecureMessage(
 				this.plugin.activeWriter,
 				this.group,

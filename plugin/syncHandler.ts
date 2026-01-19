@@ -1,6 +1,28 @@
 import * as Y from "yjs";
+import {
+	Awareness,
+	encodeAwarenessUpdate,
+	applyAwarenessUpdate,
+} from "y-protocols/awareness";
+import {
+	ViewPlugin,
+	ViewUpdate,
+	EditorView,
+	Decoration,
+	DecorationSet,
+	WidgetType,
+} from "@codemirror/view";
+import { RangeSetBuilder } from "@codemirror/state";
 import diff from "fast-diff";
-import { App, TFile, Notice, MarkdownView, normalizePath } from "obsidian";
+import {
+	App,
+	Editor,
+	EditorPosition,
+	TFile,
+	Notice,
+	MarkdownView,
+	normalizePath,
+} from "obsidian";
 import { sendSecureMessage, sendRawJSON, leaveChannel } from "./transport";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./crypto";
 import {
@@ -9,9 +31,14 @@ import {
 	SharedItem,
 	SyncGroup,
 	opError,
+	InnerMessage,
+	AwarenessUpdate,
+	RemoteCursor,
+	AwarenessState,
 } from "./types";
 
 const openDocs = new Map<string, Y.Doc>();
+const openAwareness = new Map<string, Awareness>();
 
 export class SyncHandler {
 	app: App;
@@ -38,8 +65,29 @@ export class SyncHandler {
 		// const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
 
 		const doc = new Y.Doc();
+		doc.clientID = this.hashString(this.plugin.settings.senderId);
 		const yText = doc.getText("content");
 		openDocs.set(file.path, doc);
+
+		const awareness = new Awareness(doc);
+		openAwareness.set(file.path, awareness);
+
+		awareness.setLocalState({
+			user: {
+				name: "User " + this.plugin.settings.senderId.substring(0, 4),
+				color: stringToColour(this.plugin.settings.senderId),
+				id: this.plugin.settings.senderId,
+			},
+		});
+
+		awareness.on("update", (changes: AwarenessUpdate) => {
+			const { added, updated, removed } = changes;
+			const allChanges = added.concat(updated).concat(removed);
+			if (allChanges.length > 0) {
+				const update = encodeAwarenessUpdate(awareness, allChanges);
+				void this.sendSyncMessage(file.path, "awareness", update);
+			}
+		});
 
 		const stateLoaded = await this.loadYjsState(file, doc);
 
@@ -76,9 +124,7 @@ export class SyncHandler {
 		);
 
 		new Notice(`Sync started for ${file.name}`);
-		if (group) {
-			return sharedItem;
-		}
+		if (group) return sharedItem;
 	}
 
 	async loadYjsState(file: TFile, doc: Y.Doc): Promise<boolean> {
@@ -93,11 +139,52 @@ export class SyncHandler {
 		}
 	}
 
+	async handleAwarenessUpdate(path: string, payload: string) {
+		const awareness = openAwareness.get(path);
+		if (!awareness) {
+			console.error(`[OPV] No awareness found for path: ${path}`);
+			return;
+		}
+
+		try {
+			const update = new Uint8Array(base64ToArrayBuffer(payload));
+			applyAwarenessUpdate(awareness, update, "remote");
+			console.debug(`[OPV] Applied awareness update for ${path}`);
+		} catch (e) {
+			console.error(`[OPV] Error applying awareness update for ${path}:`, e);
+		}
+	}
+
+	updateLocalCursor(editor: Editor, path: string) {
+		const awareness = openAwareness.get(path);
+		if (!awareness) return;
+
+		const cursor: EditorPosition = editor.getCursor();
+
+		const cursorState: RemoteCursor = {
+			line: cursor.line,
+			ch: cursor.ch,
+		};
+
+		awareness.setLocalStateField("cursor", cursorState);
+	}
+
+	hashString(str: string): number {
+		let hash = 0;
+		for (let i = 0; i < str.length; i++) {
+			const char = str.charCodeAt(i);
+			hash = (hash << 5) - hash + char;
+			hash |= 0; // 32 bit
+		}
+		return Math.abs(hash);
+	}
+
 	getStatePath(file: TFile | string): string {
 		const pathStr = typeof file === "string" ? file : file.path;
 		const lastSlash = pathStr.lastIndexOf("/");
 		const folder = lastSlash !== -1 ? pathStr.substring(0, lastSlash) : "";
-		const filename = lastSlash !== -1 ? pathStr.substring(lastSlash + 1) : pathStr;
+		const filename =
+			lastSlash !== -1 ? pathStr.substring(lastSlash + 1) : pathStr;
 		return normalizePath(`${folder ? folder + "/" : ""}.${filename}.yjs`);
 	}
 
@@ -258,7 +345,7 @@ export class SyncHandler {
 
 	async sendSyncMessage(
 		path: string,
-		type: "sync_vector" | "sync_snapshot" | "sync_update",
+		type: "sync_vector" | "sync_snapshot" | "sync_update" | "awareness",
 		payload: Uint8Array,
 	) {
 		const base64Payload = arrayBufferToBase64(payload.buffer as ArrayBuffer);
@@ -272,15 +359,22 @@ export class SyncHandler {
 			return;
 		}
 
+		const innerMessage: InnerMessage = {
+			type: type,
+			path: path,
+		};
+
+		if (type === "awareness") {
+			innerMessage.awarenessPayload = base64Payload;
+		} else {
+			innerMessage.syncPayload = base64Payload;
+		}
+
 		await sendSecureMessage(
 			this.plugin.activeWriter,
 			sharedItem.id,
 			this.plugin.settings.senderId,
-			{
-				type: type,
-				path: path,
-				syncPayload: base64Payload,
-			},
+			innerMessage,
 			sharedItem.pin || "",
 		);
 	}
@@ -351,6 +445,11 @@ export class SyncHandler {
 			if (timer) clearTimeout(timer);
 			this.saveTimers.delete(oldPath);
 		}
+
+		for (const aw of openAwareness.values()) {
+			aw.destroy();
+		}
+		openAwareness.clear();
 
 		const lastSlash = oldPath.lastIndexOf("/");
 		const oldFolder = lastSlash !== -1 ? oldPath.substring(0, lastSlash) : "";
@@ -466,4 +565,203 @@ export class SyncHandler {
 		await this.plugin.saveSettings();
 		new Notice(`Removed sync group ${group.id}.`);
 	}
+}
+
+class CursorWidget extends WidgetType {
+	constructor(
+		readonly color: string,
+		readonly name: string,
+	) {
+		super();
+	}
+
+	toDOM() {
+		const span = document.createElement("span");
+		span.className = "opv-remote-cursor";
+		span.style.backgroundColor = this.color;
+		span.textContent = this.name;
+		return span;
+	}
+
+	eq(other: CursorWidget) {
+		return this.color === other.color && this.name === other.name;
+	}
+}
+
+class CaretWidget extends WidgetType {
+	constructor(readonly color: string) {
+		super();
+	}
+
+	toDOM() {
+		const span = document.createElement("span");
+		span.className = "opv-remote-caret";
+		span.style.borderLeft = `2px solid ${this.color}`;
+		return span;
+	}
+
+	eq(other: CaretWidget) {
+		return this.color === other.color;
+	}
+}
+
+export const cursorPlugin = (app: App) =>
+	ViewPlugin.fromClass(
+		class {
+			decorations: DecorationSet;
+			awareness: Awareness | undefined;
+			unsubscribe: () => void;
+
+			constructor(view: EditorView) {
+				this.decorations = Decoration.none;
+				this.findAwareness(view);
+			}
+
+			findAwareness(view: EditorView) {
+				const leaf = app.workspace.getLeavesOfType("markdown").find(
+					// @ts-expect-error, not typed
+					(l) => ((l.view as MarkdownView).editor.cm as EditorView) === view,
+				);
+
+				if (leaf) {
+					const file = (leaf.view as MarkdownView).file;
+					if (file && openAwareness.has(file.path)) {
+						this.awareness = openAwareness.get(file.path);
+
+						const handler = () => {
+							view.dispatch();
+						};
+
+						this.awareness?.on("change", handler);
+						this.unsubscribe = () => {
+							this.awareness?.off("change", handler);
+						};
+					}
+				}
+			}
+
+			update(update: ViewUpdate) {
+				if (!this.awareness) {
+					this.findAwareness(update.view);
+				}
+
+				this.decorations = this.buildDecorations(update.view);
+
+        if (update.docChanged || update.viewportChanged || update.transactions) {
+          requestAnimationFrame(() => this.adjustLabels(update.view));
+        }
+			}
+
+      adjustLabels(view: EditorView) {
+        const labels = view.dom.querySelectorAll('.opv-remote-cursor');
+        if (labels.length === 0) return;
+
+        const editorRect = view.dom.getBoundingClientRect();
+        const threshold = Math.min(editorRect.width * .2, 100);
+
+        labels.forEach((el) => {
+          const label = el as HTMLElement;
+          const rect = label.getBoundingClientRect();
+          const isFlipped = label.classList.contains('flipped');
+          const anchorX = isFlipped ? rect.right : rect.left;
+          const distanceFromRight = editorRect.right - anchorX;
+
+          if (distanceFromRight < threshold) {
+            if (!isFlipped) {
+              label.classList.add("opv-align-right");
+            }
+          } else {
+            if (isFlipped) {  
+              label.classList.remove("opv-align-right");
+            }
+          }
+        });
+      }
+
+			destroy() {
+				if (this.unsubscribe) this.unsubscribe();
+			}
+
+			buildDecorations(view: EditorView): DecorationSet {
+				if (!this.awareness) return Decoration.none;
+
+				const builder = new RangeSetBuilder<Decoration>();
+				const states = this.awareness.getStates();
+				const clientID = this.awareness.clientID;
+				const cursors: {
+					pos: number;
+					color: string;
+					name: string;
+					isWidget: boolean;
+				}[] = [];
+
+				states.forEach((state, id) => {
+					const remoteState = state as AwarenessState;
+					if (id === clientID || !state.cursor || !state.user) return;
+
+					const line = Math.min(remoteState.cursor.line, view.state.doc.lines - 1);
+					if (line < 0) return;
+
+					const lineObj = view.state.doc.line(line + 1);
+					const ch = Math.min(remoteState.cursor.ch, lineObj.length);
+					const pos = lineObj.from + ch;
+
+					cursors.push({
+						pos,
+						color: remoteState.user.color,
+						name: remoteState.user.name,
+						isWidget: false,
+					});
+
+					cursors.push({
+						pos,
+						color: remoteState.user.color,
+						name: remoteState.user.name,
+						isWidget: true,
+					});
+				});
+
+				cursors.sort((a, b) => a.pos - b.pos);
+
+				for (const cursor of cursors) {
+					if (cursor.isWidget) {
+						builder.add(
+							cursor.pos,
+							cursor.pos,
+							Decoration.widget({
+								widget: new CursorWidget(cursor.color, cursor.name),
+								side: 1,
+							}),
+						);
+					} else {
+						builder.add(
+							cursor.pos,
+							cursor.pos,
+							Decoration.widget({
+								widget: new CaretWidget(cursor.color),
+								side: 0,
+							})
+						);
+					}
+				}
+
+				return builder.finish();
+			}
+		},
+		{
+			decorations: (v) => v.decorations,
+		},
+	);
+
+// Flagged as candidate to be moved to utils.ts in future refactor
+function stringToColour(str: string): string {
+	let hash = 0;
+	for (let i = 0; i < str.length; i++) {
+		hash = str.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	const h = Math.abs(hash) % 360;
+	const s = 75;
+	const l = 35;
+
+	return `hsl(${h}, ${s}%, ${l}%)`;
 }

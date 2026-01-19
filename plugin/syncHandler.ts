@@ -653,7 +653,7 @@ export const cursorPlugin = (app: App) =>
 			}
 
       adjustLabels(view: EditorView) {
-        const labels = view.dom.querySelectorAll('.opv-remote-cursor');
+        const labels = view.dom.querySelectorAll('.opv-remote-label');
         if (labels.length === 0) return;
 
         const editorRect = view.dom.getBoundingClientRect();

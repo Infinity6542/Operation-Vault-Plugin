@@ -105,6 +105,25 @@ export interface SyncGroup {
 	pin?: string;
 }
 
+export interface AwarenessUpdate {
+	added: number[];
+	updated: number[];
+	removed: number[];
+}
+
+export interface RemoteCursor {
+	line: number;
+	ch: number;
+}
+
+export interface AwarenessState {
+	user?: {
+		name: string;
+		color: string;
+	};
+	cursor?: RemoteCursor;
+}
+
 // Experimental, to be implemented later during a refactor
 export interface opError {
 	code: number;

@@ -140,7 +140,7 @@ export class ShareModal extends Modal {
 					const validate = (path: string) => {
 						const file = this.app.vault.getAbstractFileByPath(path);
 						const isValid = file && file instanceof TFile;
-						text.inputEl.toggleClass("resource-error-input", !isValid);
+						text.inputEl.toggleClass("opv-resource-error-input", !isValid);
 						text.inputEl.title = isValid ? "" : "File not found";
 					};
 					const saveAndValidate = async (value: string) => {

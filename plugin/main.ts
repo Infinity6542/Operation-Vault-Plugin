@@ -17,6 +17,7 @@ import {
 	disconnect,
 	sendSecureMessage,
 	leaveChannel,
+	startHeartbeats,
 } from "./transport";
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler } from "./syncHandler";
@@ -293,6 +294,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 						this.settings.senderId,
 					);
 				}
+				await startHeartbeats(this, this.activeWriter, this.settings.channelName);
 			}
 		} catch (e) {
 			console.error("[OPV] Connection to server failed:", e);

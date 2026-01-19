@@ -577,7 +577,7 @@ class CursorWidget extends WidgetType {
 
 	toDOM() {
 		const span = document.createElement("span");
-		span.className = "opv-remote-cursor";
+		span.className = "opv-remote-label";
 		span.style.backgroundColor = this.color;
 		span.textContent = this.name;
 		return span;

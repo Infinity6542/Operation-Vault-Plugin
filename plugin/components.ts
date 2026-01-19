@@ -253,6 +253,7 @@ export class ShareModal extends Modal {
 				this.plugin.settings.senderId,
 			);
 			console.debug(`joined channel ${newShare.id} after sharing`);
+			await this.plugin.syncHandler.startSync(file);
 			await navigator.clipboard.writeText(newShare.id);
 			new Notice(
 				`Shared ${file.name}. The ShareID has been copied to your clipboard.`,
@@ -328,6 +329,7 @@ export class ShareModal extends Modal {
 				this.plugin.settings.senderId,
 			);
 			index++;
+			await this.plugin.syncHandler.startSync(file);
 		}
 		if (index !== matches.length) {
 			console.debug(

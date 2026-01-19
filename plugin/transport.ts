@@ -739,14 +739,11 @@ export async function remove(plugin: IOpVaultPlugin, shareId: string) {
 		// was successful.
 		// const reader = stream.readable.getReader();
 
-		const file = plugin.app.vault.getAbstractFileByPath(
-			plugin.settings.sharedItems.find((i) => i.id === shareId).path,
+		await plugin.app.vault.adapter.remove(
+			plugin.syncHandler.getStatePath(
+				plugin.settings.sharedItems.find((i) => i.id === shareId).path,
+			),
 		);
-		if (file instanceof TFile) {
-			await plugin.app.vault.adapter.remove(
-					plugin.syncHandler.getStatePath(file),
-			);
-		}
 
 		const header =
 			JSON.stringify({

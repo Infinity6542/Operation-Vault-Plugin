@@ -93,12 +93,12 @@ export class SyncHandler {
 		}
 	}
 
-	getStatePath(file: TFile): string {
-		const prefix =
-			(file.parent?.path || "") && (file.parent?.path || "") !== "/"
-				? `${file.parent?.path || ""}/`
-				: "";
-		return normalizePath(`${prefix}.${file.name}.yjs`);
+	getStatePath(file: TFile | string): string {
+		const pathStr = typeof file === "string" ? file : file.path;
+		const lastSlash = pathStr.lastIndexOf("/");
+		const folder = lastSlash !== -1 ? pathStr.substring(0, lastSlash) : "";
+		const filename = lastSlash !== -1 ? pathStr.substring(lastSlash + 1) : pathStr;
+		return normalizePath(`${folder ? folder + "/" : ""}.${filename}.yjs`);
 	}
 
 	triggerSaveState(file: TFile, doc: Y.Doc) {

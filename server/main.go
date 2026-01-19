@@ -315,6 +315,10 @@ func handleStream(stream *webtransport.Stream) {
 			hub.Unlock()
 			broadcastUserList(msg.ChannelID)
 			return
+		case "download_request":
+			logger.Infof("Download request received in channel %s from %s for file %s", msg.ChannelID, msg.SenderID, msg.Payload)
+			//TODO:
+			// Fetch latest snapshot
 		default:
 			logger.Infof("Message of misc type '%s' received for channel %s", msg.Type, msg.ChannelID)
 			broadcast(msg, stream)
@@ -428,7 +432,7 @@ func upload(stream io.Reader, fileID string, ownerID string) error {
 
 	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:   aws.String(bucketName),
-		Key:      aws.String(fileID),
+		Key:      aws.String(fileID + "/" + fileID),
 		Body:     bytes.NewReader(data),
 		Metadata: map[string]string{"owner": ownerID},
 	})

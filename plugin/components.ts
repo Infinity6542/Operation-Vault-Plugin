@@ -187,10 +187,11 @@ export class ShareModal extends Modal {
 				}),
 			);
 
-		new Setting(contentEl)
-			.setName("Upload to cloud")
-			.setDesc("Store offline and offsite.")
-			.addToggle((toggle) => toggle.onChange((v) => (this.upload = v)));
+		// Force upload
+		// new Setting(contentEl)
+		// 	.setName("Upload to cloud")
+		// 	.setDesc("Store offline and offsite.")
+		// 	.addToggle((toggle) => toggle.onChange((v) => (this.upload = v)));
 
 		new Setting(contentEl).addButton((btn) => {
 			btn

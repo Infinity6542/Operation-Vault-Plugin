@@ -24,7 +24,6 @@ import { sendFileChunked } from "./fileHandler";
 import { SyncHandler, cursorPlugin } from "./syncHandler";
 import type {
 	SharedItem,
-	SyncGroup,
 	PluginSettings,
 	IOpVaultPlugin,
 	InnerMessage,
@@ -186,7 +185,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 					const sharedItemIndex = this.settings.sharedItems.findIndex(
 						(item) => item.path === file.path,
 					);
-					if (sharedItemIndex === -1) return;
+					if (sharedItemIndex === -1 || !this.activeWriter) return;
 					await remove(this, this.settings.sharedItems[sharedItemIndex].id);
 					await leaveChannel(
 						this.activeWriter,
@@ -253,10 +252,10 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				}
 
 				for (const group of fileGroups) {
-					if (!this.settings.syncGroups.some((g) => g.id === group)) continue;
-					const syncGroup: SyncGroup = this.settings.syncGroups.find(
+					const syncGroup = this.settings.syncGroups.find(
 						(g) => g.id === group,
 					);
+					if (!syncGroup) continue;
 					let shareItem = {
 						id: generateUUID(),
 						path: file.path,
@@ -280,9 +279,11 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 
 		this.registerDomEvent(document, "keyup", async (e: KeyboardEvent) => {
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			const file = view?.file;
+			if (!file) return;
 			if (view && view.file) {
 				if (
-					this.settings.sharedItems.some((item) => item.path === view.file.path)
+					this.settings.sharedItems.some((item) => item.path === file.path)
 				) {
 					this.syncHandler.updateLocalCursor(view.editor, view.file.path);
 				}
@@ -291,9 +292,11 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 
 		this.registerDomEvent(document, "mouseup", async (e: MouseEvent) => {
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			const file = view?.file;
+			if (!file) return;
 			if (view && view.file) {
 				if (
-					this.settings.sharedItems.some((item) => item.path === view.file.path)
+					this.settings.sharedItems.some((item) => item.path === file.path)
 				) {
 					this.syncHandler.updateLocalCursor(view.editor, view.file.path);
 				}
@@ -562,6 +565,7 @@ class vaultSettingsTab extends PluginSettingTab {
 							new Notice(`Revoking share for ${item.path}...`);
 							console.debug(`[OPV] Revoking share for ${item.path}...`);
 							await remove(this.plugin, item.id);
+							if (!this.plugin.activeWriter) return new Notice("Could not complete action.");
 							await leaveChannel(
 								this.plugin.activeWriter,
 								item.id,
@@ -669,6 +673,11 @@ export class DownloadModal extends Modal {
 
 	async startDownload() {
 		if (this.mode === "group") {
+			if (!this.group || !this.plugin.activeWriter) {
+				new Notice("Could not complete action. Check console for details.");
+				console.error("[OPV] No Group name provided or no active writer.");
+				return;
+			}
 			this.plugin.activeDownloads.set(this.group, this.pin);
 			const transportPacket: InnerMessage = {
 				type: "get_group",

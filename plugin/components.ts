@@ -98,12 +98,12 @@ export class ShareModal extends Modal {
 	pin: string = "";
 	upload: boolean = true;
 	item: string = "";
-	activeFile: TFile;
+	activeFile: TFile | null;
 
-	constructor(app: App, plugin: OpVaultPlugin, activeFile: TFile) {
+	constructor(app: App, plugin: OpVaultPlugin, activeFile: TFile | null) {
 		super(app);
 		this.plugin = plugin;
-		this.activeFile = activeFile;
+		this.activeFile = activeFile ? activeFile : null;
 	}
 
 	onOpen() {
@@ -303,7 +303,7 @@ export class ShareModal extends Modal {
 		// Beginning syncing the files
 		let index: number = 0;
 		for (const file of matches) {
-			let shareItem: SharedItem = this.plugin.settings.sharedItems.find(
+			let shareItem = this.plugin.settings.sharedItems.find(
 				(item) => item.path === file.path,
 			);
 			//TODO: Consider if I should just make a new SharedItem for this entirely.

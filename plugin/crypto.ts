@@ -98,7 +98,7 @@ export async function decryptPacket(
 export async function encryptBinary(
 	data: ArrayBuffer,
 	keyStr: string,
-): Promise<Uint8Array> | null {
+): Promise<Uint8Array | null> {
 	try {
 		const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
 		const iv = window.crypto.getRandomValues(new Uint8Array(IV_LEN));
@@ -130,7 +130,7 @@ export async function encryptBinary(
 export async function decryptBinary(
 	data: Uint8Array,
 	keyStr: string,
-): Promise<Uint8Array> | null {
+): Promise<Uint8Array | null> {
 	try {
 		const salt = data.slice(0, SALT_LEN);
 		const iv = data.slice(SALT_LEN, SALT_LEN + IV_LEN);

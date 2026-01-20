@@ -168,6 +168,11 @@ export async function disconnect(plugin: IOpVaultPlugin): Promise<null> {
 
 	await plugin.syncHandler.cleanup();
 
+	if (!plugin.activeWriter || !plugin.activeTransport) {
+		console.debug("[OPV] No active writer to disconnect.");
+		return null;
+	}
+
 	await sendRawJSON(plugin.activeWriter, {
 		type: "leave",
 		channel_id: plugin.settings.channelName,
@@ -175,15 +180,10 @@ export async function disconnect(plugin: IOpVaultPlugin): Promise<null> {
 		payload: "Goodbye!",
 	} as TransportPacket);
 
-	if (plugin.activeTransport) {
-		plugin.activeTransport.close();
-		plugin.activeTransport = null;
-	}
-
-	if (plugin.activeWriter) {
-		await plugin.activeWriter.close();
-		plugin.activeWriter = null;
-	}
+	plugin.activeTransport.close();
+	plugin.activeTransport = null;
+	await plugin.activeWriter.close();
+	plugin.activeWriter = null;
 
 	plugin.updatePresence(0);
 
@@ -194,7 +194,7 @@ export async function disconnect(plugin: IOpVaultPlugin): Promise<null> {
 
 	new Notice("Disconnected from server.");
 	console.debug("[OPV] Disconnected");
-	return;
+	return null;
 }
 
 export async function sendSecureMessage(
@@ -280,7 +280,10 @@ async function readLoop(
 
 					if (message.type === "user_list") {
 						try {
-							const users = JSON.parse(message.payload) as Record<string, string>;
+							const users = JSON.parse(message.payload) as Record<
+								string,
+								string
+							>;
 							if (message.channel_id === plugin.settings.channelName) {
 								const prev = new Map(plugin.onlineUsers);
 								plugin.onlineUsers.clear();
@@ -355,7 +358,12 @@ async function handleIn(
 	}
 
 	const decrypted = await decryptPacket(message.payload, key);
-	if (!decrypted) {
+	if (
+		!decrypted ||
+		!decrypted.type ||
+		!decrypted.content ||
+		!decrypted.fileId
+	) {
 		console.error("[OPV] Empty decrypted content", decrypted);
 		return;
 	}
@@ -574,6 +582,10 @@ async function handleIn(
 			console.debug(`[OPV] Sync update for file: ${decrypted.path}`);
 
 			const path = decrypted.path;
+			if (!path) {
+				console.error("[OPV] update message missing path");
+				break;
+			}
 			await receiveFile(app, path, decrypted.content, "", true);
 			break;
 		}
@@ -643,9 +655,18 @@ async function handleIn(
 		}
 		case "awareness": {
 			if (decrypted.path && decrypted.awarenessPayload) {
+				let sharedItem = plugin.settings.sharedItems.find(
+					(i) => i.id === message.channel_id,
+				);
+				if (!sharedItem) {
+					console.error(
+						"[OPV] Awareness message for unknown shared item:",
+						message.channel_id,
+					);
+					break;
+				}
 				await plugin.syncHandler.handleAwarenessUpdate(
-					plugin.settings.sharedItems.find((i) => i.id === message.channel_id)
-						.path,
+					sharedItem.path,
 					decrypted.awarenessPayload,
 				);
 			} else {
@@ -757,9 +778,13 @@ export async function remove(plugin: IOpVaultPlugin, shareId: string) {
 		// was successful.
 		// const reader = stream.readable.getReader();
 
+		let shareItem = plugin.settings.sharedItems.find((i) => i.id === shareId);
+		if (!shareItem) {
+			return new Notice(`No shared item found with ID: ${shareId}`);
+		}
 		await plugin.app.vault.adapter.remove(
 			plugin.syncHandler.getStatePath(
-				plugin.settings.sharedItems.find((i) => i.id === shareId).path,
+				shareItem.path,
 			),
 		);
 

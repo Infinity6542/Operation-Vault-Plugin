@@ -7,7 +7,7 @@ export interface IOpVaultPlugin {
 	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null;
 	activeTransport: WebTransport | null;
 	syncHandler: SyncHandler;
-	onlineUsers: string[];
+	onlineUsers: Map<string, string>;
 	activeDownloads: Map<string, string>;
 	heartbeatInterval: ReturnType<typeof setTimeout> | null;
 	updatePresence(count: number): void;
@@ -47,6 +47,7 @@ export interface TransportPacket {
 	type: "join" | "message" | "user_list" | "heartbeat" | "leave";
 	channel_id: string;
 	sender_id: string;
+	nickname?: string;
 	payload: string;
 }
 
@@ -68,6 +69,7 @@ export interface PluginSettings {
 	sharedItems: SharedItem[];
 	inboxPath: string;
 	syncGroups: SyncGroup[];
+	nickname: string;
 }
 
 export interface UploadModal {
@@ -119,13 +121,22 @@ export interface RemoteCursor {
 export interface AwarenessState {
 	user?: {
 		name: string;
-		color: string;
+		colour: string;
 	};
 	cursor?: RemoteCursor;
-  selection?: {
-    anchor: RemoteCursor;
-    head: RemoteCursor;
-  }
+	selection?: {
+		anchor: RemoteCursor;
+		head: RemoteCursor;
+	};
+}
+
+export interface CursorCache {
+	[clientID: number]: {
+		pos: number;
+		colour: string;
+		name: string;
+		selection?: { anchor: number; head: number };
+	};
 }
 
 // Experimental, to be implemented later during a refactor

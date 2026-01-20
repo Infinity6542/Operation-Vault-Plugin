@@ -42,6 +42,10 @@
     pointer-events: none;;
 }
 
+.opv-remote-caret-inline {
+    box-sizing: border-box;
+}
+
 .cm-widgetBuffer {
     position: relative;
 }

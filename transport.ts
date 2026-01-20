@@ -358,12 +358,7 @@ async function handleIn(
 	}
 
 	const decrypted = await decryptPacket(message.payload, key);
-	if (
-		!decrypted ||
-		!decrypted.type ||
-		!decrypted.content ||
-		!decrypted.fileId
-	) {
+	if (!decrypted || !decrypted.type) {
 		console.error("[OPV] Empty decrypted content", decrypted);
 		return;
 	}
@@ -376,6 +371,10 @@ async function handleIn(
 			console.debug("[OPV] Chat message:", decrypted.content);
 			break;
 		case "file_start":
+			if (!decrypted.fileId) {
+				console.error("[OPV] Empty decrypted content", decrypted);
+				return;
+			}
 			// Ignore missing fileId for now
 			incomingFiles.set(decrypted.fileId, []);
 			console.debug(
@@ -383,7 +382,11 @@ async function handleIn(
 			);
 			break;
 		case "file_chunk": {
-			if (!decrypted.fileId || !incomingFiles.has(decrypted.fileId)) {
+			if (
+				!decrypted.fileId ||
+				!incomingFiles.has(decrypted.fileId) ||
+				!decrypted.content
+			) {
 				console.debug("[OPV] file_chunk message with unknown fileId");
 				return;
 			}
@@ -396,6 +399,10 @@ async function handleIn(
 			break;
 		}
 		case "file_end": {
+			if (!decrypted.fileId) {
+				console.error("[OPV] Empty decrypted content", decrypted);
+				return;
+			}
 			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId)) {
 				console.debug("[OPV] Unknown inner message type:", decrypted);
 				break;
@@ -509,6 +516,10 @@ async function handleIn(
 			break;
 		}
 		case "diffs": {
+			if (!decrypted.content) {
+				console.error("[OPV] Empty decrypted content", decrypted);
+				return;
+			}
 			console.debug(`[OPV] Sync diffs for file: ${decrypted.fileId}`);
 
 			let remoteFiles: ManifestItem[] = [];
@@ -547,6 +558,10 @@ async function handleIn(
 			break;
 		}
 		case "changes": {
+			if (!decrypted.content) {
+				console.error("[OPV] Empty decrypted content", decrypted);
+				return;
+			}
 			console.debug(`[OPV] Sync changes for file: ${decrypted.fileId}`);
 
 			let requestedIds: string[] = [];
@@ -579,6 +594,10 @@ async function handleIn(
 			break;
 		}
 		case "update": {
+			if (!decrypted.content) {
+				console.error("[OPV] Empty decrypted content", decrypted);
+				return;
+			}
 			console.debug(`[OPV] Sync update for file: ${decrypted.path}`);
 
 			const path = decrypted.path;
@@ -698,8 +717,15 @@ export async function upload(
 		// reader is not used in upload
 		// const reader = stream.readable.getReader();
 
-		const header = JSON.stringify({ type: "upload", payload: shareId }) + "\n";
+		console.debug(`----------SENDER ID: ${plugin.settings.senderId}`);
+		const header =
+			JSON.stringify({
+				type: "upload",
+				payload: shareId,
+				sender_id: plugin.settings.senderId,
+			}) + "\n";
 		const encoder = new TextEncoder();
+		console.debug(`[OPV] Upload header: ${header}`);
 		await writer.write(encoder.encode(header));
 
 		const fileData = await app.vault.readBinary(file);
@@ -783,9 +809,7 @@ export async function remove(plugin: IOpVaultPlugin, shareId: string) {
 			return new Notice(`No shared item found with ID: ${shareId}`);
 		}
 		await plugin.app.vault.adapter.remove(
-			plugin.syncHandler.getStatePath(
-				shareItem.path,
-			),
+			plugin.syncHandler.getStatePath(shareItem.path),
 		);
 
 		const header =

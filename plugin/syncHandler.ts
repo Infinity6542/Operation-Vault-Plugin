@@ -74,8 +74,10 @@ export class SyncHandler {
 
 		awareness.setLocalState({
 			user: {
-				name: "User " + this.plugin.settings.senderId.substring(0, 4),
-				color: stringToColour(this.plugin.settings.senderId),
+				name:
+					this.plugin.onlineUsers.get(this.plugin.settings.senderId) ||
+					"User " + this.plugin.settings.senderId.substring(0, 4),
+				colour: stringToColour(this.plugin.settings.senderId),
 				id: this.plugin.settings.senderId,
 			},
 		});
@@ -412,6 +414,7 @@ export class SyncHandler {
 				type: "leave",
 				channel_id: i.id,
 				sender_id: this.plugin.settings.senderId,
+				nickname: this.plugin.settings.nickname,
 				payload: "bye bye!",
 			};
 			await sendRawJSON(this.plugin.activeWriter, packet);
@@ -611,11 +614,11 @@ export const cursorPlugin = (app: App) =>
 			decorations: DecorationSet;
 			awareness: Awareness | undefined;
 			unsubscribe: () => void;
-      refresh: boolean;
+			refresh: boolean;
 
 			constructor(view: EditorView) {
 				this.decorations = Decoration.none;
-        this.refresh = true;
+				this.refresh = true;
 				this.findAwareness(view);
 			}
 
@@ -630,15 +633,25 @@ export const cursorPlugin = (app: App) =>
 					if (file && openAwareness.has(file.path)) {
 						this.awareness = openAwareness.get(file.path);
 
-            const handler = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
-              const clientID = this.awareness?.clientID;
-              const changes = [...added, ...updated, ...removed].filter(id => id !== clientID);
+						const handler = ({
+							added,
+							updated,
+							removed,
+						}: {
+							added: number[];
+							updated: number[];
+							removed: number[];
+						}) => {
+							const clientID = this.awareness?.clientID;
+							const changes = [...added, ...updated, ...removed].filter(
+								(id) => id !== clientID,
+							);
 
-              if (changes.length > 0) {
-                this.refresh = true;
-                view.dispatch();
-              }
-            }
+							if (changes.length > 0) {
+								this.refresh = true;
+								view.dispatch();
+							}
+						};
 						this.awareness?.on("change", handler);
 						this.unsubscribe = () => {
 							this.awareness?.off("change", handler);
@@ -652,63 +665,67 @@ export const cursorPlugin = (app: App) =>
 					this.findAwareness(update.view);
 				}
 
-        if (this.awareness && (update.selectionSet)) {
-          const selection = update.view.state.selection.main;
-          const doc = update.state.doc;
-          const anchorline = doc.lineAt(selection.anchor);
-          const headLine = doc.lineAt(selection.head);
+				if (this.awareness && update.selectionSet) {
+					const selection = update.view.state.selection.main;
+					const doc = update.state.doc;
+					const anchorline = doc.lineAt(selection.anchor);
+					const headLine = doc.lineAt(selection.head);
 
-          const anchor = {
-            line: anchorline.number - 1,
-            ch: selection.anchor - anchorline.from,
-          }
+					const anchor = {
+						line: anchorline.number - 1,
+						ch: selection.anchor - anchorline.from,
+					};
 
-          const head = {
-            line: headLine.number - 1,
-            ch: selection.head - headLine.from,
-          }
+					const head = {
+						line: headLine.number - 1,
+						ch: selection.head - headLine.from,
+					};
 
-          this.awareness.setLocalStateField("cursor", head);
-          this.awareness.setLocalStateField("selection", { anchor, head });
-        }
+					this.awareness.setLocalStateField("cursor", head);
+					this.awareness.setLocalStateField("selection", { anchor, head });
+				}
 
 				this.decorations = this.decorations.map(update.changes);
 
-        if (this.refresh && !update.docChanged) {
-          this.decorations = this.buildDecorations(update.view);
-          this.refresh = false;
-        }
+				if (this.refresh && !update.docChanged) {
+					this.decorations = this.buildDecorations(update.view);
+					this.refresh = false;
+				}
 
-        if (update.docChanged || update.viewportChanged || update.transactions) {
-          requestAnimationFrame(() => this.adjustLabels(update.view));
-        }
+				if (
+					update.docChanged ||
+					update.viewportChanged ||
+					update.transactions
+				) {
+					requestAnimationFrame(() => this.adjustLabels(update.view));
+				}
 			}
 
-      adjustLabels(view: EditorView) {
-        const labels = view.dom.querySelectorAll('.opv-remote-label');
-        if (labels.length === 0) return;
+			adjustLabels(view: EditorView) {
+				const labels = view.dom.querySelectorAll(".opv-remote-label");
+				if (labels.length === 0) return;
 
-        const editorRect = view.dom.getBoundingClientRect();
-        const threshold = Math.min(editorRect.width * .2, 100);
+				const editorRect = view.dom.getBoundingClientRect();
+				const threshold = Math.min(editorRect.width * 0.2, 100);
 
-        labels.forEach((el) => {
-          const label = el as HTMLElement;
-          const rect = label.getBoundingClientRect();
-          const isFlipped = label.classList.contains('flipped');
-          const anchorX = isFlipped ? rect.right : rect.left;
-          const distanceFromRight = editorRect.right - anchorX;
+				labels.forEach((el) => {
+					const label = el as HTMLElement;
+					const rect = label.getBoundingClientRect();
+					const isFlipped = label.classList.contains("flipped");
+					const anchorX = isFlipped ? rect.right : rect.left;
+					const distanceFromRight = editorRect.right - anchorX;
 
-          if (distanceFromRight < threshold) {
-            if (!isFlipped) {
-              label.classList.add("opv-align-right");
-            }
-          } else {
-            if (isFlipped) {  
-              label.classList.remove("opv-align-right");
-            }
-          }
-        });
-      }
+					if (distanceFromRight < threshold) {
+						if (!isFlipped) {
+							label.classList.add("opv-align-right");
+						}
+					} else {
+						if (isFlipped) {
+							label.classList.remove("opv-align-right");
+						}
+					}
+				});
+			}
 
 			destroy() {
 				if (this.unsubscribe) this.unsubscribe();
@@ -720,89 +737,92 @@ export const cursorPlugin = (app: App) =>
 				const builder = new RangeSetBuilder<Decoration>();
 				const states = this.awareness.getStates();
 				const clientID = this.awareness.clientID;
-        const items: {
-          from: number;
-          to: number;
-          decoration: Decoration;
-        }[] = [];
+				const items: {
+					from: number;
+					to: number;
+					decoration: Decoration;
+				}[] = [];
 
 				states.forEach((state, id) => {
 					const remoteState = state as AwarenessState;
 					if (id === clientID || !state.cursor || !state.user) return;
 
-					const line = Math.min(remoteState.cursor.line, view.state.doc.lines - 1);
+					const line = Math.min(
+						remoteState.cursor.line,
+						view.state.doc.lines - 1,
+					);
 					if (line < 0) return;
-          
-          if (remoteState.selection) {
-            const { anchor, head } = remoteState.selection;
-            const maxLine = view.state.doc.lines - 1;
-            const aLine = Math.min(anchor.line, maxLine);
-            const hLine = Math.min(head.line, maxLine);
 
-            if (aLine >= 0 && hLine >= 0) {
-              const aLineObj = view.state.doc.line(aLine + 1);
-              const hLineObj = view.state.doc.line(hLine + 1);
-              const aPos = Math.min(aLineObj.from + anchor.ch, aLineObj.to);
-              const hPos = Math.min(hLineObj.from + head.ch, hLineObj.to);
-              const from = Math.min(aPos, hPos);
-              const to = Math.max(aPos, hPos);
+					if (remoteState.selection) {
+						const { anchor, head } = remoteState.selection;
+						const maxLine = view.state.doc.lines - 1;
+						const aLine = Math.min(anchor.line, maxLine);
+						const hLine = Math.min(head.line, maxLine);
 
-              if (from !== to) {
-                items.push({
-                  from,
-                  to,
-                  decoration: Decoration.mark({
-                    attributes: {
-                      style: `background-color: ${toTransparent(remoteState.user.color, 0.3)};`,
-                    },
-                    class: 'opv-remote-selection',
-                  })
-                })
-              }
-            }
-          }
-          
-          if (remoteState.cursor) {
-            const maxLine = view.state.doc.lines - 1;
-            const line = Math.min(remoteState.cursor.line, maxLine);
-    
-            if (line >= 0) {
-              const lineObj = view.state.doc.line(line + 1);
-              const ch = Math.min(remoteState.cursor.ch, lineObj.length);
-              const pos = lineObj.from + ch;
-  
-    					items.push({
-                from: pos,
-                to: pos,
-                decoration: Decoration.widget({
-                  widget: new CursorWidget(
-                    remoteState.user.color,
-                    remoteState.user.name,
-                  ),
-                  side: 1,
-                })
-	  				  });
-    
-		  	  		items.push({
-                from: pos,
-                to: pos,
-                decoration: Decoration.widget({
-                  widget: new CaretWidget(remoteState.user.color),
-                  side: 0,
-                })
-					    });
-            }
-          }
-        });
+						if (aLine >= 0 && hLine >= 0) {
+							const aLineObj = view.state.doc.line(aLine + 1);
+							const hLineObj = view.state.doc.line(hLine + 1);
+							const aPos = Math.min(aLineObj.from + anchor.ch, aLineObj.to);
+							const hPos = Math.min(hLineObj.from + head.ch, hLineObj.to);
+							const from = Math.min(aPos, hPos);
+							const to = Math.max(aPos, hPos);
+
+							if (from !== to) {
+								items.push({
+									from,
+									to,
+									decoration: Decoration.mark({
+										attributes: {
+											style: `background-colour: ${toTransparent(remoteState.user.colour, 0.3)};`,
+										},
+										class: "opv-remote-selection",
+									}),
+								});
+							}
+						}
+					}
+
+					if (remoteState.cursor) {
+						const maxLine = view.state.doc.lines - 1;
+						const line = Math.min(remoteState.cursor.line, maxLine);
+
+						if (line >= 0) {
+							const lineObj = view.state.doc.line(line + 1);
+							const ch = Math.min(remoteState.cursor.ch, lineObj.length);
+							const pos = lineObj.from + ch;
+
+							items.push({
+								from: pos,
+								to: pos,
+								decoration: Decoration.widget({
+									widget: new CursorWidget(
+										remoteState.user.colour,
+										remoteState.user.name,
+									),
+									side: 1,
+								}),
+							});
+
+							items.push({
+								from: pos,
+								to: pos,
+								decoration: Decoration.widget({
+									widget: new CaretWidget(remoteState.user.colour),
+									side: 0,
+								}),
+							});
+						}
+					}
+				});
 
 				items.sort((a, b) => {
-          if (a.from !== b.from) return a.from - b.from;
+					if (a.from !== b.from) return a.from - b.from;
 
-          return a.decoration.startSide - b.decoration.startSide;
-        });
+					return a.decoration.startSide - b.decoration.startSide;
+				});
 
 				for (const item of items) {
-          builder.add(item.from, item.to, item.decoration);
+					builder.add(item.from, item.to, item.decoration);
 				}
 
 				return builder.finish();
@@ -827,8 +847,8 @@ function stringToColour(str: string): string {
 }
 
 function toTransparent(hsl: string, alpha: number): string {
-  if (hsl.startsWith('hsl')) {
-    return hsl.replace("hsl", "hsla").replace(")", `, ${alpha})`);
-  }
-  return hsl;
+	if (hsl.startsWith("hsl")) {
+		return hsl.replace("hsl", "hsla").replace(")", `, ${alpha})`);
+	}
+	return hsl;
 }

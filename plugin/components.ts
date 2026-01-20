@@ -252,6 +252,7 @@ export class ShareModal extends Modal {
 				this.plugin.activeWriter,
 				newShare.id,
 				this.plugin.settings.senderId,
+				this.plugin.settings.nickname,
 			);
 			console.debug(`joined channel ${newShare.id} after sharing`);
 			await this.plugin.syncHandler.startSync(file);
@@ -328,6 +329,7 @@ export class ShareModal extends Modal {
 				this.plugin.activeWriter,
 				shareItem.id,
 				this.plugin.settings.senderId,
+				this.plugin.settings.nickname,
 			);
 			index++;
 			await this.plugin.syncHandler.startSync(file);
@@ -348,6 +350,7 @@ export class ShareModal extends Modal {
 			this.plugin.activeWriter,
 			id,
 			this.plugin.settings.senderId,
+				this.plugin.settings.nickname,
 		);
 		console.debug(`[OPV] Joined channel ${id} after creating group`);
 		group.id = id;

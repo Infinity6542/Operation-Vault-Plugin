@@ -46,6 +46,7 @@ var bucketName = "opvault-test"
 type Client struct {
 	Stream   *webtransport.Stream
 	PeerID   string
+	Nickname string
 	LastSeen time.Time
 }
 
@@ -54,6 +55,7 @@ type Message struct {
 	ChannelID string `json:"channel_id"`
 	Payload   string `json:"payload"`
 	SenderID  string `json:"sender_id"`
+	Nickname  string `json:"nickname,omitempty"`
 }
 
 type Hub struct {
@@ -254,6 +256,7 @@ func handleStream(stream *webtransport.Stream) {
 		hub.Channels[msg.ChannelID][msg.SenderID] = &Client{
 			Stream:   stream,
 			PeerID:   msg.SenderID,
+			Nickname: msg.Nickname,
 			LastSeen: time.Now(),
 		}
 		hub.Unlock()
@@ -288,7 +291,7 @@ func handleStream(stream *webtransport.Stream) {
 		switch msg.Type {
 		// Joining a share channel
 		case "join":
-			logger.Infof("Client %s joining channel: %s", msg.SenderID, msg.ChannelID)
+			logger.Infof("Client %s (%s) joining channel: %s", msg.SenderID, msg.Nickname, msg.ChannelID)
 			hub.Lock()
 
 			if _, ok := hub.Channels[msg.ChannelID]; !ok {
@@ -309,7 +312,7 @@ func handleStream(stream *webtransport.Stream) {
 			// Way too annoying lol, removing the logs and doing nothing instead
 			// logger.Infof("Heartbeat received from %s in channel %s", msg.SenderID, msg.ChannelID)
 		case "leave":
-			logger.Infof("Client %s leaving channel: %s", msg.SenderID, msg.ChannelID)
+			logger.Infof("Client %s (%s) leaving channel: %s", msg.SenderID, msg.Nickname, msg.ChannelID)
 			hub.Lock()
 			delete(hub.Channels[msg.ChannelID], msg.SenderID)
 			hub.Unlock()
@@ -528,9 +531,9 @@ func cleanupLoop() error {
 				continue
 			}
 
-			var userList []string
+			userList := make(map[string]string)
 			for _, c := range clients {
-				userList = append(userList, c.PeerID)
+				userList[c.PeerID] = c.Nickname
 			}
 			listJSON, err := json.Marshal(userList)
 			if err != nil {
@@ -559,9 +562,9 @@ func broadcastUserList(channelID string) error {
 	clients := hub.Channels[channelID]
 	hub.RUnlock()
 
-	var userList []string
+	userList := make(map[string]string)
 	for _, client := range clients {
-		userList = append(userList, client.PeerID)
+		userList[client.PeerID] = client.Nickname
 	}
 
 	listJSON, err := json.Marshal(userList)

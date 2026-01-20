@@ -57,6 +57,7 @@ export async function connect(
 			type: "join",
 			channel_id: channelID,
 			sender_id: senderId,
+			nickname: plugin.settings.nickname,
 			payload: "Hi!",
 		};
 		await sendRawJSON(writer, joinPacket);
@@ -279,16 +280,21 @@ async function readLoop(
 
 					if (message.type === "user_list") {
 						try {
-							const users = JSON.parse(message.payload) as string[];
+							const users = JSON.parse(message.payload) as Record<string, string>;
 							if (message.channel_id === plugin.settings.channelName) {
-								plugin.onlineUsers = users;
-								plugin.updatePresence(users.length);
+								const prev = new Map(plugin.onlineUsers);
+								plugin.onlineUsers.clear();
+								for (const [id, nickname] of Object.entries(users)) {
+									plugin.onlineUsers.set(id, nickname || prev.get(id) || id);
+								}
+								const e = Array.from(plugin.onlineUsers.values());
+								plugin.updatePresence(e.length);
 								console.debug("[OPV] Current users in channel:", users);
 								if (noticeDebounce) {
 									clearTimeout(noticeDebounce);
 								}
 								noticeDebounce = setTimeout(() => {
-									new Notice(`Currently online: ${users.length}`);
+									new Notice(`Currently online: ${e.length}`);
 									noticeDebounce = null;
 								}, 500);
 							} else {
@@ -486,7 +492,7 @@ async function handleIn(
 					shareItem.id,
 					fileToSend,
 					app,
-					plugin.settings.senderId,
+					plugin,
 					shareItem.pin || "",
 				);
 				shareItem.shares++;
@@ -638,7 +644,8 @@ async function handleIn(
 		case "awareness": {
 			if (decrypted.path && decrypted.awarenessPayload) {
 				await plugin.syncHandler.handleAwarenessUpdate(
-					plugin.settings.sharedItems.find((i) => i.id === message.channel_id).path,
+					plugin.settings.sharedItems.find((i) => i.id === message.channel_id)
+						.path,
 					decrypted.awarenessPayload,
 				);
 			} else {
@@ -711,7 +718,12 @@ export async function requestFile(
 	console.debug(`[OPV] Requesting file with share ID: ${shareId}`);
 	new Notice(`Requesting file...`);
 
-	await joinChannel(plugin.activeWriter, shareId, plugin.settings.senderId);
+	await joinChannel(
+		plugin.activeWriter,
+		shareId,
+		plugin.settings.senderId,
+		plugin.settings.nickname,
+	);
 
 	await sendSecureMessage(
 		plugin.activeWriter,
@@ -774,11 +786,13 @@ export async function joinChannel(
 	writer: WritableStreamDefaultWriter<Uint8Array>,
 	channelId: string,
 	senderId: string,
+	nickname: string,
 ) {
 	const packet: TransportPacket = {
 		type: "join",
 		channel_id: channelId,
 		sender_id: senderId,
+		nickname: nickname,
 		payload: "Transfer room :D",
 	};
 	await sendRawJSON(writer, packet);
@@ -790,6 +804,7 @@ export async function leaveChannel(
 	channelId: string,
 	senderId: string,
 ) {
+	// No nickname as they can just tell from the senderId I think maybe idk yet :sob:
 	const packet: TransportPacket = {
 		type: "leave",
 		channel_id: channelId,

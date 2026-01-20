@@ -1,6 +1,7 @@
 import { App, TFile, Notice } from "obsidian";
 import { sendSecureMessage } from "./transport";
 import { getHash, arrayBufferToBase64 } from "./crypto";
+import { IOpVaultPlugin } from "./types";
 
 function generateFileId(): string {
 	return Math.random().toString(36).substring(2, 15);
@@ -12,7 +13,7 @@ export async function sendFileChunked(
 	channel: string,
 	file: TFile,
 	app: App,
-	senderId: string,
+	plugin: IOpVaultPlugin,
 	key: string,
 ) {
 	// const channel = settings.channelName;
@@ -37,7 +38,7 @@ export async function sendFileChunked(
 		await sendSecureMessage(
 			writer,
 			channel,
-			senderId,
+			plugin.settings.senderId,
 			{
 				type: "file_start",
 				content: "",
@@ -58,7 +59,7 @@ export async function sendFileChunked(
 			await sendSecureMessage(
 				writer,
 				channel,
-				senderId,
+				plugin.settings.senderId,
 				{
 					type: "file_chunk",
 					content: base64Chunk,
@@ -89,7 +90,7 @@ export async function sendFileChunked(
 		await sendSecureMessage(
 			writer,
 			channel,
-			senderId,
+			plugin.settings.senderId,
 			{
 				type: "file_end",
 				content: "",

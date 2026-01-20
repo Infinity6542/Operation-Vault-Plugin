@@ -42,6 +42,7 @@ const defaultSettings: PluginSettings = {
 	sharedItems: [],
 	inboxPath: "",
 	syncGroups: [],
+	nickname: "",
 };
 
 export function generateUUID(): string {
@@ -67,7 +68,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	heartbeatInterval: ReturnType<typeof setTimeout> | null = null;
 	syncHandler: SyncHandler;
 	statusBarItem: HTMLElement;
-	onlineUsers: string[] = [];
+	onlineUsers: Map<string, string> = new Map();
 
 	async onload() {
 		console.debug("[OPV] Loading client...");
@@ -87,8 +88,10 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.updatePresence(0);
 		this.statusBarItem.addClass("mod-clickable");
 		this.statusBarItem.addEventListener("click", () => {
-			if (this.onlineUsers.length > 0) {
-				new Notice(`Online users:\n${this.onlineUsers.join("\n")}`);
+			if (this.onlineUsers.size > 0) {
+				let userList = Array.from(this.onlineUsers.values()).join("\n");
+				console.debug(this.onlineUsers);
+				new Notice(`Online users:\n${userList}`);
 			} else {
 				new Notice("No other users online.");
 			}
@@ -113,7 +116,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				this.settings.channelName,
 				activeFile,
 				this.app,
-				this.settings.senderId,
+				this,
 				this.settings.encryptionKey,
 			);
 		});
@@ -265,7 +268,12 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 					this.settings.sharedItems.push(shareItem);
 					syncGroup.files.push(shareItem);
 					await this.saveSettings();
-					await joinChannel(this.activeWriter, group, this.settings.senderId);
+					await joinChannel(
+						this.activeWriter,
+						group,
+						this.settings.senderId,
+						this.settings.nickname,
+					);
 				}
 			}),
 		);
@@ -310,13 +318,19 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			if (this.activeWriter) {
 				console.debug("[OPV] Rejoining share channels.");
 				for (const item of this.settings.sharedItems) {
-					await joinChannel(this.activeWriter, item.id, this.settings.senderId);
+					await joinChannel(
+						this.activeWriter,
+						item.id,
+						this.settings.senderId,
+						this.settings.nickname,
+					);
 				}
 				for (const group of this.settings.syncGroups) {
 					await joinChannel(
 						this.activeWriter,
 						group.id,
 						this.settings.senderId,
+						this.settings.nickname,
 					);
 				}
 				await startHeartbeats(
@@ -374,6 +388,20 @@ class vaultSettingsTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl).setName("Configuration").setHeading();
+
+		new Setting(containerEl)
+			.setName("Nickname")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
+			.setDesc("Your sender ID shown to other users.")
+			.addText((text) =>
+				text
+					.setPlaceholder("Bob")
+					.setValue(this.plugin.settings.nickname)
+					.onChange(async (value) => {
+						this.plugin.settings.nickname = value;
+						await this.plugin.saveSettings();
+					}),
+			);
 
 		new Setting(containerEl)
 			// eslint-disable-next-line obsidianmd/ui/sentence-case
@@ -650,6 +678,7 @@ export class DownloadModal extends Modal {
 				this.plugin.activeWriter,
 				this.group,
 				this.plugin.settings.senderId,
+				this.plugin.settings.nickname,
 			);
 			//TODO: Figure out how to handle collisions with the server (group names)
 			await sendSecureMessage(

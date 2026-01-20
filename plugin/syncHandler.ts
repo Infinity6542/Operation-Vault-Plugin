@@ -773,7 +773,7 @@ export const cursorPlugin = (app: App) =>
 									to,
 									decoration: Decoration.mark({
 										attributes: {
-											style: `background-colour: ${toTransparent(remoteState.user.colour, 0.3)};`,
+											style: `background-color: ${toTransparent(remoteState.user.colour, 0.3)};`,
 										},
 										class: "opv-remote-selection",
 									}),

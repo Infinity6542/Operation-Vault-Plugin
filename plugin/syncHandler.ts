@@ -569,7 +569,7 @@ export class SyncHandler {
 
 class CursorWidget extends WidgetType {
 	constructor(
-		readonly color: string,
+		readonly colour: string,
 		readonly name: string,
 	) {
 		super();
@@ -578,30 +578,30 @@ class CursorWidget extends WidgetType {
 	toDOM() {
 		const span = document.createElement("span");
 		span.className = "opv-remote-label";
-		span.style.backgroundColor = this.color;
+		span.style.backgroundColor = this.colour;
 		span.textContent = this.name;
 		return span;
 	}
 
 	eq(other: CursorWidget) {
-		return this.color === other.color && this.name === other.name;
+		return this.colour === other.colour && this.name === other.name;
 	}
 }
 
 class CaretWidget extends WidgetType {
-	constructor(readonly color: string) {
+	constructor(readonly colour: string) {
 		super();
 	}
 
 	toDOM() {
 		const span = document.createElement("span");
 		span.className = "opv-remote-caret";
-		span.style.borderLeft = `2px solid ${this.color}`;
+		span.style.borderLeft = `2px solid ${this.colour}`;
 		return span;
 	}
 
 	eq(other: CaretWidget) {
-		return this.color === other.color;
+		return this.colour === other.colour;
 	}
 }
 
@@ -611,9 +611,11 @@ export const cursorPlugin = (app: App) =>
 			decorations: DecorationSet;
 			awareness: Awareness | undefined;
 			unsubscribe: () => void;
+      refresh: boolean;
 
 			constructor(view: EditorView) {
 				this.decorations = Decoration.none;
+        this.refresh = true;
 				this.findAwareness(view);
 			}
 
@@ -628,10 +630,15 @@ export const cursorPlugin = (app: App) =>
 					if (file && openAwareness.has(file.path)) {
 						this.awareness = openAwareness.get(file.path);
 
-						const handler = () => {
-							view.dispatch();
-						};
+            const handler = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
+              const clientID = this.awareness?.clientID;
+              const changes = [...added, ...updated, ...removed].filter(id => id !== clientID);
 
+              if (changes.length > 0) {
+                this.refresh = true;
+                view.dispatch();
+              }
+            }
 						this.awareness?.on("change", handler);
 						this.unsubscribe = () => {
 							this.awareness?.off("change", handler);
@@ -645,7 +652,32 @@ export const cursorPlugin = (app: App) =>
 					this.findAwareness(update.view);
 				}
 
-				this.decorations = this.buildDecorations(update.view);
+        if (this.awareness && (update.selectionSet)) {
+          const selection = update.view.state.selection.main;
+          const doc = update.state.doc;
+          const anchorline = doc.lineAt(selection.anchor);
+          const headLine = doc.lineAt(selection.head);
+
+          const anchor = {
+            line: anchorline.number - 1,
+            ch: selection.anchor - anchorline.from,
+          }
+
+          const head = {
+            line: headLine.number - 1,
+            ch: selection.head - headLine.from,
+          }
+
+          this.awareness.setLocalStateField("cursor", head);
+          this.awareness.setLocalStateField("selection", { anchor, head });
+        }
+
+				this.decorations = this.decorations.map(update.changes);
+
+        if (this.refresh && !update.docChanged) {
+          this.decorations = this.buildDecorations(update.view);
+          this.refresh = false;
+        }
 
         if (update.docChanged || update.viewportChanged || update.transactions) {
           requestAnimationFrame(() => this.adjustLabels(update.view));
@@ -688,12 +720,11 @@ export const cursorPlugin = (app: App) =>
 				const builder = new RangeSetBuilder<Decoration>();
 				const states = this.awareness.getStates();
 				const clientID = this.awareness.clientID;
-				const cursors: {
-					pos: number;
-					color: string;
-					name: string;
-					isWidget: boolean;
-				}[] = [];
+        const items: {
+          from: number;
+          to: number;
+          decoration: Decoration;
+        }[] = [];
 
 				states.forEach((state, id) => {
 					const remoteState = state as AwarenessState;
@@ -701,48 +732,77 @@ export const cursorPlugin = (app: App) =>
 
 					const line = Math.min(remoteState.cursor.line, view.state.doc.lines - 1);
 					if (line < 0) return;
+          
+          if (remoteState.selection) {
+            const { anchor, head } = remoteState.selection;
+            const maxLine = view.state.doc.lines - 1;
+            const aLine = Math.min(anchor.line, maxLine);
+            const hLine = Math.min(head.line, maxLine);
 
-					const lineObj = view.state.doc.line(line + 1);
-					const ch = Math.min(remoteState.cursor.ch, lineObj.length);
-					const pos = lineObj.from + ch;
+            if (aLine >= 0 && hLine >= 0) {
+              const aLineObj = view.state.doc.line(aLine + 1);
+              const hLineObj = view.state.doc.line(hLine + 1);
+              const aPos = Math.min(aLineObj.from + anchor.ch, aLineObj.to);
+              const hPos = Math.min(hLineObj.from + head.ch, hLineObj.to);
+              const from = Math.min(aPos, hPos);
+              const to = Math.max(aPos, hPos);
 
-					cursors.push({
-						pos,
-						color: remoteState.user.color,
-						name: remoteState.user.name,
-						isWidget: false,
-					});
+              if (from !== to) {
+                items.push({
+                  from,
+                  to,
+                  decoration: Decoration.mark({
+                    attributes: {
+                      style: `background-color: ${toTransparent(remoteState.user.color, 0.3)};`,
+                    },
+                    class: 'opv-remote-selection',
+                  })
+                })
+              }
+            }
+          }
+          
+          if (remoteState.cursor) {
+            const maxLine = view.state.doc.lines - 1;
+            const line = Math.min(remoteState.cursor.line, maxLine);
+    
+            if (line >= 0) {
+              const lineObj = view.state.doc.line(line + 1);
+              const ch = Math.min(remoteState.cursor.ch, lineObj.length);
+              const pos = lineObj.from + ch;
+  
+    					items.push({
+                from: pos,
+                to: pos,
+                decoration: Decoration.widget({
+                  widget: new CursorWidget(
+                    remoteState.user.color,
+                    remoteState.user.name,
+                  ),
+                  side: 1,
+                })
+	  				  });
+    
+		  	  		items.push({
+                from: pos,
+                to: pos,
+                decoration: Decoration.widget({
+                  widget: new CaretWidget(remoteState.user.color),
+                  side: 0,
+                })
+					    });
+            }
+          }
+        });
 
-					cursors.push({
-						pos,
-						color: remoteState.user.color,
-						name: remoteState.user.name,
-						isWidget: true,
-					});
-				});
+				items.sort((a, b) => {
+          if (a.from !== b.from) return a.from - b.from;
 
-				cursors.sort((a, b) => a.pos - b.pos);
+          return a.decoration.startSide - b.decoration.startSide;
+        });
 
-				for (const cursor of cursors) {
-					if (cursor.isWidget) {
-						builder.add(
-							cursor.pos,
-							cursor.pos,
-							Decoration.widget({
-								widget: new CursorWidget(cursor.color, cursor.name),
-								side: 1,
-							}),
-						);
-					} else {
-						builder.add(
-							cursor.pos,
-							cursor.pos,
-							Decoration.widget({
-								widget: new CaretWidget(cursor.color),
-								side: 0,
-							})
-						);
-					}
+				for (const item of items) {
+          builder.add(item.from, item.to, item.decoration);
 				}
 
 				return builder.finish();
@@ -764,4 +824,11 @@ function stringToColour(str: string): string {
 	const l = 35;
 
 	return `hsl(${h}, ${s}%, ${l}%)`;
+}
+
+function toTransparent(hsl: string, alpha: number): string {
+  if (hsl.startsWith('hsl')) {
+    return hsl.replace("hsl", "hsla").replace(")", `, ${alpha})`);
+  }
+  return hsl;
 }

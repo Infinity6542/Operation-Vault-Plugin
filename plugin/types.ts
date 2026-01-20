@@ -122,6 +122,10 @@ export interface AwarenessState {
 		color: string;
 	};
 	cursor?: RemoteCursor;
+  selection?: {
+    anchor: RemoteCursor;
+    head: RemoteCursor;
+  }
 }
 
 // Experimental, to be implemented later during a refactor

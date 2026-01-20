@@ -197,6 +197,7 @@ func handleStream(stream *webtransport.Stream) {
 
 	switch msg.Type {
 	case "upload":
+		logger.Infof("e, %s", msg)
 		logger.Infof("Upload request received for file ID: %s", msg.Payload)
 		multiReader := io.MultiReader(decoder.Buffered(), stream)
 
@@ -452,7 +453,7 @@ func upload(stream io.Reader, fileID string, ownerID string) error {
 func getFileOwner(fileID string) (string, bool) {
 	head, err := s3Client.HeadObject(context.TODO(), &s3.HeadObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(fileID),
+		Key:    aws.String(fileID + "/" + fileID),
 	})
 	if err != nil {
 		logger.Debugf("Failed to get metadata for file %s: %v", fileID, err)
@@ -472,7 +473,7 @@ func download(stream *webtransport.Stream, fileID string) error {
 
 	out, err := s3Client.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(fileID),
+		Key:    aws.String(fileID + "/" + fileID),
 	})
 	if err != nil {
 		logger.Errorf("Failed to download file from S3: %v", err)
@@ -493,7 +494,7 @@ func download(stream *webtransport.Stream, fileID string) error {
 func remove(fileID string) error {
 	_, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(fileID),
+		Key:    aws.String(fileID + "/" + fileID),
 	})
 	if err != nil {
 		logger.Errorf("Failed to delete file from S3: %v", err)

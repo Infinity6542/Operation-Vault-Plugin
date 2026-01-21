@@ -11,7 +11,7 @@
     border-bottom-left-radius: 0px;
     translate: 0 0;
     transform: translate(0, -100%);
-    transition: transform 0.2s ease-in-out, border-radius 0.2s ease-in-out;
+    transition: transform 0.1s ease-out, border-radius 0.2s ease-out;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     width: max-content;
     white-space: nowrap;

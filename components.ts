@@ -92,6 +92,9 @@ export class FileSelector extends AbstractInputSuggest<FileMatch> {
 	}
 }
 
+//TODO: Merge group and individual file sharing methods
+// Do this by completely adopting the group and using the unique UUID from
+// the old individual share as the group name/ID.
 export class ShareModal extends Modal {
 	mode: "file" | "group" = "file";
 	plugin: OpVaultPlugin;

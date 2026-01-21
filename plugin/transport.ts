@@ -620,7 +620,7 @@ async function handleIn(
 			}
 			break;
 		}
-		case "get_group": {
+		case "group_get": {
 			if (decrypted.content) {
 				const group = plugin.settings.syncGroups.find(
 					(g) => g.id === decrypted.content,
@@ -638,7 +638,7 @@ async function handleIn(
 					key,
 				);
 			} else {
-				console.error("[OPV] get_group message missing content");
+				console.error("[OPV] group_get message missing content");
 			}
 			break;
 		}

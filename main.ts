@@ -1,7 +1,6 @@
 import {
 	App,
 	debounce,
-	Modal,
 	Notice,
 	Plugin,
 	PluginSettingTab,
@@ -11,11 +10,9 @@ import {
 } from "obsidian";
 import {
 	connect,
-	requestFile,
 	remove,
 	joinChannel,
 	disconnect,
-	sendSecureMessage,
 	leaveChannel,
 	startHeartbeats,
 } from "./transport";
@@ -25,9 +22,8 @@ import type {
 	SharedItem,
 	PluginSettings,
 	IOpVaultPlugin,
-	InnerMessage,
 } from "./types";
-import { FolderSelector, ShareModal } from "./components";
+import { FolderSelector, ShareModal, DownloadModal } from "./components";
 
 export type { SharedItem };
 
@@ -538,7 +534,8 @@ class vaultSettingsTab extends PluginSettingTab {
 							new Notice(`Revoking share for ${item.path}...`);
 							console.debug(`[OPV] Revoking share for ${item.path}...`);
 							await remove(this.plugin, item.id);
-							if (!this.plugin.activeWriter) return new Notice("Could not complete action.");
+							if (!this.plugin.activeWriter)
+								return new Notice("Could not complete action.");
 							await leaveChannel(
 								this.plugin.activeWriter,
 								item.id,
@@ -556,139 +553,5 @@ class vaultSettingsTab extends PluginSettingTab {
 				);
 			});
 		}
-	}
-}
-
-export class DownloadModal extends Modal {
-	plugin: OpVaultPlugin;
-	group?: string;
-	shareId?: string;
-	pin: string = "";
-	mode: "file" | "group" = "file";
-
-	constructor(app: App, plugin: OpVaultPlugin) {
-		super(app);
-		this.plugin = plugin;
-	}
-
-	onOpen() {
-		this.display();
-	}
-
-	display() {
-		const { contentEl } = this;
-		contentEl.empty();
-		contentEl.createEl("h2", { text: `Download shared item` });
-
-		new Setting(contentEl)
-			.setName("Share type")
-			.setDesc("Share a single file or create a sync group?")
-			.addDropdown((e) => {
-				e.addOption("file", "Single file")
-					.addOption("group", "Sync group")
-					.setValue(this.mode)
-					.onChange((value) => {
-						this.mode = value as "file" | "group";
-						this.display();
-					});
-			});
-
-		contentEl.createEl("h3", { text: "Download details" });
-
-		if (this.mode === "group") {
-			new Setting(contentEl)
-				.setName("Group name")
-				.setDesc("Enter the group name provided to you.")
-				.addText((text) =>
-					text
-						// eslint-disable-next-line obsidianmd/ui/sentence-case
-						.setPlaceholder("share-group-1")
-						.onChange((value) => {
-							this.group = value;
-						}),
-				);
-		} else {
-			new Setting(contentEl)
-				// eslint-disable-next-line obsidianmd/ui/sentence-case
-				.setName("Share ID")
-				// eslint-disable-next-line obsidianmd/ui/sentence-case
-				.setDesc("Enter the share ID provided to you.")
-				.addText((text) =>
-					text
-						// eslint-disable-next-line obsidianmd/ui/sentence-case
-						.setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
-						.onChange((value) => {
-							this.shareId = value;
-						}),
-				);
-		}
-
-		new Setting(contentEl)
-			.setName("PIN")
-			// eslint-disable-next-line obsidianmd/ui/sentence-case
-			.setDesc("Enter the PIN if you were provided one.")
-			.addText((text) =>
-				text.setPlaceholder("1234").onChange((value) => {
-					this.pin = value;
-				}),
-			);
-
-		new Setting(contentEl).addButton((btn) => {
-			btn
-				.setButtonText(this.mode === "file" ? "Get file" : "Get group")
-				.setCta()
-				.onClick(async () => {
-					await this.startDownload();
-					this.close();
-				});
-		});
-	}
-
-	async startDownload() {
-		if (this.mode === "group") {
-			if (!this.group || !this.plugin.activeWriter) {
-				new Notice("Could not complete action. Check console for details.");
-				console.error("[OPV] No Group name provided or no active writer.");
-				return;
-			}
-			this.plugin.activeDownloads.set(this.group, this.pin);
-			const transportPacket: InnerMessage = {
-				type: "group_get",
-				content: this.group,
-			};
-			await joinChannel(
-				this.plugin.activeWriter,
-				this.group,
-				this.plugin.settings.senderId,
-				this.plugin.settings.nickname,
-			);
-			//TODO: Figure out how to handle collisions with the server (group names)
-			await sendSecureMessage(
-				this.plugin.activeWriter,
-				this.group,
-				this.plugin.settings.senderId,
-				transportPacket,
-				this.pin,
-			);
-			console.debug(`[OPV] Requested group info for group: ${this.group}`);
-		} else {
-			if (!this.shareId) {
-				// eslint-disable-next-line obsidianmd/ui/sentence-case
-				new Notice("Please enter a valid share ID.");
-				console.error("[OPV] No Share ID provided.");
-				return;
-			}
-
-			new Notice(`Starting download for Share ID: ${this.shareId}`);
-			console.debug(`[OPV] Starting download for Share ID: ${this.shareId}`);
-
-			this.plugin.activeDownloads.set(this.shareId, this.pin);
-			await requestFile(this.shareId, this.plugin, this.pin);
-		}
-	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
 	}
 }

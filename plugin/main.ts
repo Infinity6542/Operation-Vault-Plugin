@@ -226,7 +226,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 					values.forEach((g) => fileGroups.push(g));
 				} else {
 					console.debug(
-						`Unhandled type for sync-group frontmatter in ${
+						`[OPV] Unhandled type for sync-group frontmatter in ${
 							file.path
 						}: ${typeof frontmatter}`,
 					);

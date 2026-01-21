@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -194,10 +195,10 @@ func handleStream(stream *webtransport.Stream) {
 		}
 		return
 	}
+	channel := msg.ChannelID
 
 	switch msg.Type {
 	case "upload":
-		logger.Infof("e, %s", msg)
 		logger.Infof("Upload request received for file ID: %s", msg.Payload)
 		multiReader := io.MultiReader(decoder.Buffered(), stream)
 
@@ -207,7 +208,7 @@ func handleStream(stream *webtransport.Stream) {
 			logger.Warnf("Expected newline after JSON message, got: %v", rm[0])
 		}
 
-		err := upload(multiReader, msg.Payload, msg.SenderID)
+		err := upload(multiReader, channel, msg.Payload, msg.SenderID)
 		if err != nil {
 			logger.Errorf("Upload failed for file ID %s: %v", msg.Payload, err)
 		} else {
@@ -218,7 +219,7 @@ func handleStream(stream *webtransport.Stream) {
 		}
 		return
 	case "download":
-		download(stream, msg.Payload)
+		download(stream, channel, msg.Payload)
 		return
 	case "remove":
 		fileOwnersMu.RLock()
@@ -226,7 +227,7 @@ func handleStream(stream *webtransport.Stream) {
 		fileOwnersMu.RUnlock()
 
 		if !exists {
-			owner, exists = getFileOwner(msg.Payload)
+			owner, exists = getOwner(msg.Payload)
 			if exists {
 				fileOwnersMu.Lock()
 				fileOwners[msg.Payload] = owner
@@ -427,19 +428,32 @@ func initS3() {
 	logger.Info("S3 client initialised")
 }
 
-func upload(stream io.Reader, fileID string, ownerID string) error {
+func upload(stream io.Reader, channel string, fileID string, ownerID string) error {
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		logger.Errorf("Failed to read data from stream: %v", err)
 		return err
 	}
 
-	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:   aws.String(bucketName),
-		Key:      aws.String(fileID + "/" + fileID),
-		Body:     bytes.NewReader(data),
-		Metadata: map[string]string{"owner": ownerID},
-	})
+	if filepath.Ext(fileID) == ".yjs" {
+		// owner, exists := getOwner(channel)
+		// if exists == false {
+		// 	owner = ownerID
+		// }
+		_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+			Bucket:   aws.String(bucketName),
+			Key:      aws.String(channel + "/" + fileID + time.Now().Format("20060102-150405")),
+			Body:     bytes.NewReader(data),
+			Metadata: map[string]string{"owner": ownerID},
+		})
+	} else {
+		_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+			Bucket:   aws.String(bucketName),
+			Key:      aws.String(channel + "/" + fileID),
+			Body:     bytes.NewReader(data),
+			Metadata: map[string]string{"owner": ownerID},
+		})
+	}
 
 	if err != nil {
 		logger.Errorf("Failed to upload file to S3: %v", err)
@@ -450,7 +464,7 @@ func upload(stream io.Reader, fileID string, ownerID string) error {
 	return nil
 }
 
-func getFileOwner(fileID string) (string, bool) {
+func getOwner(fileID string) (string, bool) {
 	head, err := s3Client.HeadObject(context.TODO(), &s3.HeadObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileID + "/" + fileID),
@@ -468,12 +482,12 @@ func getFileOwner(fileID string) (string, bool) {
 	return "", false
 }
 
-func download(stream *webtransport.Stream, fileID string) error {
+func download(stream *webtransport.Stream, channel string, fileID string) error {
 	logger.Infof("Downloading file %s from bucket %s", fileID, bucketName)
 
 	out, err := s3Client.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(fileID + "/" + fileID),
+		Key:    aws.String(channel + "/" + fileID),
 	})
 	if err != nil {
 		logger.Errorf("Failed to download file from S3: %v", err)
@@ -494,7 +508,7 @@ func download(stream *webtransport.Stream, fileID string) error {
 func remove(fileID string) error {
 	_, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(fileID + "/" + fileID),
+		Key:    aws.String(fileID),
 	})
 	if err != nil {
 		logger.Errorf("Failed to delete file from S3: %v", err)

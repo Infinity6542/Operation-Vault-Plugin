@@ -45,6 +45,7 @@ export class SyncHandler {
 	app: App;
 	plugin: IOpVaultPlugin;
 	isRemoteUpdate: boolean = false;
+	awaitingSnapshot = new Set<string>();
 
 	saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -94,6 +95,23 @@ export class SyncHandler {
 
 		const stateLoaded = await this.loadYjsState(file, doc);
 
+		// Always wait for a snapshot to prevent stale state duplication
+		// unless we are sure we are alone (which we can't easily know yet)
+		this.awaitingSnapshot.add(file.path);
+		setTimeout(() => {
+			if (this.awaitingSnapshot.has(file.path)) {
+				console.debug(
+					`[OPV] Snapshot timeout for ${file.path}, hydrating/resuming local edits`,
+				);
+				this.awaitingSnapshot.delete(file.path);
+				// Force a check to catch up any edits made while waiting
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (view && view.file && view.file.path === file.path) {
+					this.handleLocalEdit(view.editor.getValue(), yText, file.path);
+				}
+			}
+		}, 3000);
+
 		if (!stateLoaded) {
 			console.debug(
 				`[OPV] No Yjs state found for ${file.path}, will initialize after sync`,
@@ -121,7 +139,7 @@ export class SyncHandler {
 			this.app.workspace.on("editor-change", (editor, view) => {
 				if (!view.file) return;
 				if (view.file && view.file.path === file.path) {
-					this.handleLocalEdit(editor.getValue(), yText);
+					this.handleLocalEdit(editor.getValue(), yText, file.path);
 				}
 			}),
 		);
@@ -247,6 +265,8 @@ export class SyncHandler {
 			}
 			case "sync_snapshot": {
 				await this.applyUpdateToDoc(doc, data, path);
+				this.awaitingSnapshot.delete(path);
+
 				// After receiving initial snapshot, if doc is still empty, initialize from local file
 				const yText = doc.getText("content");
 				if (yText.length === 0) {
@@ -323,6 +343,7 @@ export class SyncHandler {
 					);
 				} else {
 					console.debug(`[OPV] Updating editor content for ${path}`);
+					const scrollInfo = editor.getScrollInfo();
 					editor.setValue(newContent);
 					if (cursor) {
 						const lineCount = editor.lineCount();
@@ -332,6 +353,7 @@ export class SyncHandler {
 						let newCh = Math.min(cursor.ch, lineLength);
 						editor.setCursor({ line: newLine, ch: newCh });
 					}
+					editor.scrollTo(scrollInfo.left, scrollInfo.top);
 				}
 			}
 
@@ -387,8 +409,14 @@ export class SyncHandler {
 		);
 	}
 
-	handleLocalEdit(newContent: string, yText: Y.Text) {
+	handleLocalEdit(newContent: string, yText: Y.Text, path: string) {
 		if (this.isRemoteUpdate) return;
+		if (this.awaitingSnapshot.has(path)) {
+			console.debug(
+				`[OPV] Ignoring local edit for ${path} while awaiting snapshot`,
+			);
+			return;
+		}
 
 		const currentContent = yText.toJSON();
 		if (currentContent === newContent) return;
@@ -632,7 +660,7 @@ export const cursorPlugin = (app: App) =>
 			findAwareness(view: EditorView) {
 				const leaf = app.workspace.getLeavesOfType("markdown").find(
 					// @ts-expect-error, not typed
-					(l) => ((l.view as MarkdownView).editor.cm as EditorView) === view,
+					(l) => ((l.view as MarkdownView).editor?.cm as EditorView) === view,
 				);
 
 				if (leaf) {

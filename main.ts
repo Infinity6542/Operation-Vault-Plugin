@@ -680,7 +680,7 @@ export class DownloadModal extends Modal {
 			}
 			this.plugin.activeDownloads.set(this.group, this.pin);
 			const transportPacket: InnerMessage = {
-				type: "get_group",
+				type: "group_get",
 				content: this.group,
 			};
 			await joinChannel(

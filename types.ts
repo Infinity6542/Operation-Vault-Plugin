@@ -29,7 +29,7 @@ export interface InnerMessage {
 		| "sync_vector"
 		| "sync_snapshot"
 		| "sync_update"
-		| "get_group"
+		| "group_get"
 		| "group_info"
 		| "awareness";
 	content?: string;

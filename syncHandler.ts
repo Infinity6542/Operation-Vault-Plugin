@@ -94,7 +94,7 @@ export class SyncHandler {
 		});
 
 		const stateLoaded = await this.loadYjsState(file, doc);
-		
+
 		this.awaitingSnapshot.add(file.path);
 		setTimeout(() => {
 			if (this.awaitingSnapshot.has(file.path)) {

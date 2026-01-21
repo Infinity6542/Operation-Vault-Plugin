@@ -8,7 +8,6 @@ import {
 	Setting,
 	TFolder,
 	TFile,
-	MarkdownView,
 } from "obsidian";
 import {
 	connect,
@@ -36,7 +35,6 @@ const defaultSettings: PluginSettings = {
 	serverUrl: "https://127.0.0.1:8080/ws",
 	channelName: "vault-1",
 	encryptionKey: "default",
-	//TODO: Implement nicknames
 	senderId: "",
 	sharedItems: [],
 	inboxPath: "",
@@ -80,6 +78,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		}
 
 		this.syncHandler = new SyncHandler(this.app, this);
+		this.syncHandler.setupGlobalListeners();
 
 		this.addSettingTab(new vaultSettingsTab(this.app, this));
 
@@ -276,32 +275,6 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 				}
 			}),
 		);
-
-		this.registerDomEvent(document, "keyup", async (e: KeyboardEvent) => {
-			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-			const file = view?.file;
-			if (!file) return;
-			if (view && view.file) {
-				if (
-					this.settings.sharedItems.some((item) => item.path === file.path)
-				) {
-					this.syncHandler.updateLocalCursor(view.editor, view.file.path);
-				}
-			}
-		});
-
-		this.registerDomEvent(document, "mouseup", async (e: MouseEvent) => {
-			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-			const file = view?.file;
-			if (!file) return;
-			if (view && view.file) {
-				if (
-					this.settings.sharedItems.some((item) => item.path === file.path)
-				) {
-					this.syncHandler.updateLocalCursor(view.editor, view.file.path);
-				}
-			}
-		});
 
 		await this.tryConnect();
 	}

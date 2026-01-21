@@ -131,19 +131,23 @@ export class SyncHandler {
 		const stateVector = Y.encodeStateVector(doc);
 		await this.sendSyncMessage(file.path, "sync_vector", stateVector);
 
-		// Move this to the class (outside this function) in the future as a
-		// listener for better performance
+		new Notice(`Sync started for ${file.name}`);
+		if (group) return sharedItem;
+	}
+
+	setupGlobalListeners() {
 		this.plugin.registerEvent(
 			this.app.workspace.on("editor-change", (editor, view) => {
 				if (!view.file) return;
-				if (view.file && view.file.path === file.path) {
-					this.handleLocalEdit(editor.getValue(), yText, file.path);
+				if (openDocs.has(view.file.path)) {
+					const doc = openDocs.get(view.file.path);
+					const yText = doc?.getText("content");
+					if (yText) {
+						this.handleLocalEdit(editor.getValue(), yText, view.file.path);
+					}
 				}
 			}),
 		);
-
-		new Notice(`Sync started for ${file.name}`);
-		if (group) return sharedItem;
 	}
 
 	async loadYjsState(file: TFile, doc: Y.Doc): Promise<boolean> {
@@ -664,6 +668,8 @@ export const cursorPlugin = (app: App) =>
 					const file = (leaf.view as MarkdownView).file;
 					if (file && openAwareness.has(file.path)) {
 						this.awareness = openAwareness.get(file.path);
+						
+						let debounceFrame: number | null = null;
 
 						const handler = ({
 							added,
@@ -681,11 +687,16 @@ export const cursorPlugin = (app: App) =>
 
 							if (changes.length > 0) {
 								this.refresh = true;
-								view.dispatch();
+								if (debounceFrame) cancelAnimationFrame(debounceFrame);
+								debounceFrame = requestAnimationFrame(() => {
+									debounceFrame = null;
+									view.dispatch();
+								});
 							}
 						};
 						this.awareness?.on("change", handler);
 						this.unsubscribe = () => {
+							if (debounceFrame) cancelAnimationFrame(debounceFrame);
 							this.awareness?.off("change", handler);
 						};
 					}
@@ -719,7 +730,7 @@ export const cursorPlugin = (app: App) =>
 
 				this.decorations = this.decorations.map(update.changes);
 
-				if (this.refresh && !update.docChanged) {
+				if (this.refresh || update.viewportChanged) {
 					this.decorations = this.buildDecorations(update.view);
 					this.refresh = false;
 				}

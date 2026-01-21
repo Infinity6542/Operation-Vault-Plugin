@@ -94,9 +94,7 @@ export class SyncHandler {
 		});
 
 		const stateLoaded = await this.loadYjsState(file, doc);
-
-		// Always wait for a snapshot to prevent stale state duplication
-		// unless we are sure we are alone (which we can't easily know yet)
+		
 		this.awaitingSnapshot.add(file.path);
 		setTimeout(() => {
 			if (this.awaitingSnapshot.has(file.path)) {
@@ -273,42 +271,41 @@ export class SyncHandler {
 					console.debug(
 						`[OPV] Document still empty after snapshot for ${path}`,
 					);
-					break;
-				}
-				const file = getFile(this.app, path);
-				if (!file) {
-					console.error(`[OPV] Could not find local file for path: ${path}`);
-					break;
-				}
-				const content = await this.app.vault.read(file);
-				if (content.length <= 0) {
-					console.error(`[OPV] Local file is empty for path: ${path}`);
-					break;
-				}
-				if (this.plugin.settings.senderId.localeCompare(sharedItem.id) < 0) {
-					console.debug(
-						`[OPV] Peer had no content, initializing from local file: ${path}`,
-					);
-					doc.transact(() => {
-						yText.insert(0, content);
-					}, "local");
-					this.triggerSaveState(file, doc);
-				} else {
-					console.debug(
-						`[OPV] Peer had no content, deferring initialization (tie-breaker)`,
-					);
-					// Wait for peer to initialize, or do it ourselves after timeout
-					setTimeout(() => {
-						if (yText.length === 0) {
-							console.debug(
-								`[OPV] Peer didn't initialize, doing it ourselves: ${path}`,
-							);
-							doc.transact(() => {
-								yText.insert(0, content);
-							}, "local");
-							this.triggerSaveState(file, doc);
-						}
-					}, 2000);
+					const file = getFile(this.app, path);
+					if (!file) {
+						console.error(`[OPV] Could not find local file for path: ${path}`);
+						break;
+					}
+					const content = await this.app.vault.read(file);
+					if (content.length <= 0) {
+						console.error(`[OPV] Local file is empty for path: ${path}`);
+						break;
+					}
+					if (this.plugin.settings.senderId.localeCompare(sharedItem.id) < 0) {
+						console.debug(
+							`[OPV] Peer had no content, initializing from local file: ${path}`,
+						);
+						doc.transact(() => {
+							yText.insert(0, content);
+						}, "local");
+						this.triggerSaveState(file, doc);
+					} else {
+						console.debug(
+							`[OPV] Peer had no content, deferring initialization (tie-breaker)`,
+						);
+						// Wait for peer to initialize, or do it ourselves after timeout
+						setTimeout(() => {
+							if (yText.length === 0) {
+								console.debug(
+									`[OPV] Peer didn't initialize, doing it ourselves: ${path}`,
+								);
+								doc.transact(() => {
+									yText.insert(0, content);
+								}, "local");
+								this.triggerSaveState(file, doc);
+							}
+						}, 2000);
+					}
 				}
 				break;
 			}

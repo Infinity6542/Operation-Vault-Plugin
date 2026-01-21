@@ -139,6 +139,21 @@ export interface CursorCache {
 	};
 }
 
+export interface Manifest {
+	version: number;
+	updatedAt: number;
+	updatedBy: string;
+	snapshots: Snapshot[];
+}
+
+export interface Snapshot {
+	iteration: number;
+	hash: string;
+	size: number;
+	senderId: string;
+	ctime: number;
+}
+
 // Experimental, to be implemented later during a refactor
 export interface opError {
 	code: number;

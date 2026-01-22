@@ -20,7 +20,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -435,25 +434,25 @@ func upload(stream io.Reader, channel string, fileID string, ownerID string) err
 		return err
 	}
 
-	if filepath.Ext(fileID) == ".yjs" {
-		// owner, exists := getOwner(channel)
-		// if exists == false {
-		// 	owner = ownerID
-		// }
-		_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-			Bucket:   aws.String(bucketName),
-			Key:      aws.String(channel + "/" + fileID + time.Now().Format("20060102-150405")),
-			Body:     bytes.NewReader(data),
-			Metadata: map[string]string{"owner": ownerID},
-		})
-	} else {
-		_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-			Bucket:   aws.String(bucketName),
-			Key:      aws.String(channel + "/" + fileID),
-			Body:     bytes.NewReader(data),
-			Metadata: map[string]string{"owner": ownerID},
-		})
-	}
+	// if filepath.Ext(fileID) == ".yjs" {
+	// 	// owner, exists := getOwner(channel)
+	// 	// if exists == false {
+	// 	// 	owner = ownerID
+	// 	// }
+	// 	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+	// 		Bucket:   aws.String(bucketName),
+	// 		Key:      aws.String(channel + "/" + fileID + time.Now().Format("20060102-150405")),
+	// 		Body:     bytes.NewReader(data),
+	// 		Metadata: map[string]string{"owner": ownerID},
+	// 	})
+	// } else {
+	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(channel + "/" + fileID),
+		Body:     bytes.NewReader(data),
+		Metadata: map[string]string{"owner": ownerID},
+	})
+	// }
 
 	if err != nil {
 		logger.Errorf("Failed to upload file to S3: %v", err)

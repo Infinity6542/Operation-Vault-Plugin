@@ -18,7 +18,6 @@ import {
 	UploadModal,
 	InnerMessage,
 } from "./types";
-// import syncHandler from "./syncHandler";
 import OpVaultPlugin, { generateUUID } from "./main";
 import {
 	joinChannel,
@@ -249,11 +248,6 @@ export class ShareModal extends Modal {
 				app: this.app,
 				plugin: this.plugin,
 			};
-			if (!this.plugin.activeTransport) {
-				new Notice("Not connected to server.");
-				console.debug("[OPV] No active transport found.");
-				return;
-			}
 			if (this.upload) {
 				await upload(uploadObject, newShare.id, newShare.key);
 			}
@@ -467,7 +461,7 @@ export class DownloadModal extends Modal {
 		if (this.mode === "group") {
 			if (!this.group || !this.plugin.activeWriter) {
 				new Notice("Could not complete action. Check console for details.");
-				console.error("[OPV] No Group name provided or no active writer.");
+				console.error("[OPV] No group name provided or no active writer.");
 				return;
 			}
 			this.plugin.activeDownloads.set(this.group, this.pin);

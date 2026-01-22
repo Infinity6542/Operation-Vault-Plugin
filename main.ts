@@ -22,6 +22,7 @@ import type {
 	SharedItem,
 	PluginSettings,
 	IOpVaultPlugin,
+	Manifest,
 } from "./types";
 import { FolderSelector, ShareModal, DownloadModal } from "./components";
 
@@ -62,6 +63,8 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	syncHandler: SyncHandler;
 	statusBarItem: HTMLElement;
 	onlineUsers: Map<string, string> = new Map();
+	channelUsers: Map<string, Set<string>> = new Map();
+	manifests: Map<string, Manifest> = new Map();
 
 	async onload() {
 		console.debug("[OPV] Loading client...");

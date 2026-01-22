@@ -886,7 +886,7 @@ export async function requestFile(
 	plugin: IOpVaultPlugin,
 	pin?: string,
 ) {
-	if (!plugin.activeWriter) {
+	if (!plugin.activeWriter || !plugin.activeTransport) {
 		new Notice("No active connection for download.");
 		return;
 	}
@@ -901,8 +901,50 @@ export async function requestFile(
 		plugin.settings.nickname,
 	);
 
-	await sendSecureMessage(
-		plugin.activeWriter,
+	if (
+		plugin.channelUsers.has(shareId) &&
+		plugin.channelUsers.get(shareId)!.size > 1
+	) {
+		await sendSecureMessage(
+			plugin.activeWriter,
+			shareId,
+			plugin.settings.senderId,
+			{
+				type: "download_request",
+				shareId: shareId,
+				pin: pin || "",
+			},
+			pin || "",
+		);
+	} else {
+		const buffer = await download(plugin, shareId, "manifest.json");
+		if (!buffer) {
+			console.error("[OPV] Failed to download manifest");
+			new Notice("Failed to download manifest. Check console for details.");
+			return;
+		}
+
+		const key = pin && pin.length > 0 ? pin : null;
+		let manifestBuffer: Uint8Array | null = null;
+		if (key) {
+			manifestBuffer = await decryptBinary(buffer, key);
+		} else {
+			manifestBuffer = buffer;
+		}
+
+		if (!manifestBuffer) {
+			console.error("[OPV] Failed to decrypt manifest");
+			new Notice("Failed to decrypt manifest.");
+			return;
+		}
+
+		const manifest = JSON.parse(
+			new TextDecoder().decode(manifestBuffer),
+		) as Manifest;
+		await getLatestSnapshot(plugin, manifest, key, shareId);
+	}
+}
+
 		shareId,
 		plugin.settings.senderId,
 		{

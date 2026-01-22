@@ -945,21 +945,144 @@ export async function requestFile(
 	}
 }
 
+export async function getLatestSnapshot(
+	plugin: IOpVaultPlugin,
+	manifest: Manifest,
+	key: string | null,
+	shareId: string,
+	overwrite: boolean = true,
+) {
+	plugin.manifests.set(shareId, manifest);
+	console.debug(`[OPV] Received manifest for ${shareId}:`, manifest);
+	const latest = manifest.snapshots[manifest.snapshots.length - 1];
+	const snapshotBuffer = await download(
+		plugin,
 		shareId,
-		plugin.settings.senderId,
-		{
-			type: "download_request",
-			shareId: shareId,
-			pin: pin || "",
-		},
-		pin || "",
+		`${latest.ctime}_${latest.hash.slice(0, 8)}`,
 	);
-	// await sendRawJSON(plugin.activeWriter, {
-	// 	type: "download_request",
-	// 	channel_id: shareId,
-	// 	sender_id: plugin.settings.senderId,
-	// 	payload: shareId,
-	// });
+
+	let file: Uint8Array | null = null;
+	if (snapshotBuffer) {
+		if (key) {
+			file = await decryptBinary(snapshotBuffer, key);
+		} else {
+			file = snapshotBuffer;
+		}
+	} else {
+		console.error("[OPV] Invalid snapshot buffer type");
+		new Notice("Action could not be completed. Check console for details.");
+		return;
+	}
+	if (!file) {
+		console.error("[OPV] Invalid snapshot data");
+		new Notice("Action could not be completed. Check console for details.");
+		return;
+	}
+	const nameLen = file[0] | (file[1] << 8);
+	const nameBytes = file.slice(2, 2 + nameLen);
+	const fileName = new TextDecoder().decode(nameBytes);
+	const fileData = file.slice(2 + nameLen);
+
+	const base64String = arrayBufferToBase64(fileData.buffer);
+
+	// Determine where to save the file
+	let inboxPath = plugin.settings.inboxPath;
+	const existingItem = plugin.settings.sharedItems.find((i) => i.id === shareId);
+
+	// If overwriting and item exists, use its path's parent folder as "inbox"
+	// effectively telling receiveFile to update that specific file if names match
+	if (overwrite && existingItem) {
+		const fullPath = existingItem.path;
+		// receiveFile uses inboxPath + filename.
+		// If we want to overwrite 'folder/file.md', we should pass 'folder/' as inboxPath
+		// and ensure filename matches 'file.md'.
+		// However, receiveFile has specific logic.
+		// Let's pass the exact logic:
+		// If overwrite is true, receiveFile checks if app.vault.getAbstractFileByPath(finalName) exists.
+		// We need to ensure finalName resolves to existingItem.path.
+		const lastSlash = fullPath.lastIndexOf("/");
+		if (lastSlash !== -1) {
+			inboxPath = fullPath.substring(0, lastSlash);
+		} else {
+			inboxPath = "";
+		}
+	}
+
+	const path = await receiveFile(
+		plugin.app,
+		fileName,
+		base64String,
+		inboxPath,
+		overwrite,
+	);
+
+	if (path) {
+		const statePath = plugin.syncHandler.getStatePath(path);
+		// If updating, we might want to preserve the pin from the existing item if not passed
+		const pin =
+			key ||
+			plugin.activeDownloads.get(shareId) ||
+			existingItem?.pin ||
+			"";
+
+		const stateBuffer = await download(
+			plugin,
+			shareId,
+			`${latest.ctime}_${latest.hash.slice(0, 8)}.yjs`,
+		);
+
+		if (stateBuffer) {
+			let decryptedState: Uint8Array | null = null;
+			if (pin) {
+				decryptedState = await decryptBinary(stateBuffer, pin);
+			} else {
+				decryptedState = stateBuffer;
+			}
+
+			if (decryptedState) {
+				await plugin.app.vault.adapter.writeBinary(
+					statePath,
+					decryptedState.buffer as ArrayBuffer,
+				);
+				console.debug(
+					`[OPV] Saved state file for downloaded file at: ${statePath}`,
+				);
+			}
+		}
+
+		// Only add new SharedItem if it doesn't exist
+		if (!plugin.settings.sharedItems.some((i) => i.id === shareId)) {
+			const item: SharedItem = {
+				id: shareId,
+				path: path,
+				pin: pin || "",
+				key: key || "",
+				createdAt: Date.now(),
+				shares: 0,
+			};
+
+			plugin.settings.sharedItems.push(item);
+			await plugin.saveSettings();
+			console.debug(
+				`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${shareId})`,
+			);
+		} else {
+			console.debug(`[OPV] Updated existing SharedItem file: ${path}`);
+		}
+
+		plugin.activeDownloads.delete(shareId);
+
+		const tFile = plugin.app.vault.getAbstractFileByPath(path);
+		if (tFile instanceof TFile) {
+			// If we just updated, we might need to reload the Yjs doc in SyncHandler
+			// But SyncHandler.startSync usually handles checking if doc exists.
+			// If doc exists, we might need to re-apply the new state from disk.
+			// For now, let's just ensure startSync is called.
+			await plugin.syncHandler.startSync(tFile);
+		}
+	} else {
+		console.warn(`[OPV] Failed to save/update file.`);
+	}
 }
 
 export async function remove(plugin: IOpVaultPlugin, shareId: string) {

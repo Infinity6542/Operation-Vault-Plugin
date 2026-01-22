@@ -8,8 +8,10 @@ export interface IOpVaultPlugin {
 	activeTransport: WebTransport | null;
 	syncHandler: SyncHandler;
 	onlineUsers: Map<string, string>;
+	channelUsers: Map<string, Set<string>>;
 	activeDownloads: Map<string, string>;
 	heartbeatInterval: ReturnType<typeof setTimeout> | null;
+	manifests: Map<string, Manifest>;
 	updatePresence(count: number): void;
 	saveSettings(): Promise<void>;
 	registerEvent(event: EventRef): void;
@@ -22,6 +24,7 @@ export interface InnerMessage {
 		| "file_start"
 		| "file_chunk"
 		| "file_end"
+		| "download"
 		| "download_request"
 		| "diffs"
 		| "changes"
@@ -141,6 +144,7 @@ export interface CursorCache {
 
 export interface Manifest {
 	version: number;
+	owner: string;
 	updatedAt: number;
 	updatedBy: string;
 	snapshots: Snapshot[];

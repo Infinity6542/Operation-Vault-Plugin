@@ -4,7 +4,8 @@ import {
 	decryptPacket,
 	arrayBufferToBase64,
 	encryptBinary,
-	// 	decryptBinary,
+	decryptBinary,
+	getHash,
 } from "./crypto";
 import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {
@@ -16,7 +17,10 @@ import type {
 	SyncMessage,
 	ManifestItem,
 	SyncGroup,
+	Manifest,
+	Snapshot,
 } from "./types";
+import { getDate } from "./utils";
 
 const incomingFiles = new Map<string, Uint8Array[]>();
 let noticeDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -301,10 +305,12 @@ async function readLoop(
 									noticeDebounce = null;
 								}, 500);
 							} else {
-								console.debug(
-									`[OPV] Users in channel ${message.channel_id}:`,
-									users,
-								);
+								if (!plugin.channelUsers.has(message.channel_id)) {
+									plugin.channelUsers.delete(message.channel_id);
+								}
+								plugin.channelUsers.set(message.channel_id, new Set());
+								const set = plugin.channelUsers.get(message.channel_id)!;
+								Object.keys(users).forEach((id) => set.add(id));
 							}
 						} catch (e) {
 							console.error("[OPV] Error parsing user list", e);
@@ -475,6 +481,20 @@ async function handleIn(
 		}
 		case "download_request": {
 			console.debug(`[OPV] Download request for: ${decrypted.shareId}`);
+
+			const users = Array.from(
+				plugin.channelUsers.get(message.channel_id) || [],
+			).sort();
+			let index = 0;
+			if (users[0] === message.sender_id) {
+				index = 1;
+			}
+			if (users.length <= 1 || users[index] !== plugin.settings.senderId) {
+				console.debug(
+					`[OPV] Ignoring download request due to not being the leader or the request was made in unusual circumstances.`,
+				);
+				break;
+			}
 
 			const shareItem = plugin.settings.sharedItems.find(
 				(i: SharedItem) => i.id === decrypted.shareId,
@@ -707,6 +727,29 @@ export async function upload(
 	const app = modal.app;
 	const plugin = modal.plugin;
 	const transport = plugin.activeTransport;
+	const manifest: Manifest = {
+		version: 1,
+		owner: plugin.settings.senderId,
+		updatedAt: Date.now(),
+		updatedBy: plugin.settings.senderId,
+		snapshots: [],
+	};
+	const snapshot: Snapshot = {
+		iteration: 1,
+		hash: "",
+		size: file.stat.size,
+		senderId: plugin.settings.senderId,
+		ctime: Date.now(),
+	};
+	snapshot.hash = await getHash(await app.vault.readBinary(file));
+	manifest.snapshots.push(snapshot);
+	plugin.manifests.set(shareId, manifest);
+	const existingManifest = plugin.manifests.get(shareId);
+	if (existingManifest) {
+		snapshot.iteration =
+			existingManifest.snapshots[existingManifest?.snapshots.length - 1]
+				.iteration + 1;
+	}
 	if (!transport) return new Notice("No active connection.");
 
 	try {
@@ -717,11 +760,12 @@ export async function upload(
 		// reader is not used in upload
 		// const reader = stream.readable.getReader();
 
-		console.debug(`----------SENDER ID: ${plugin.settings.senderId}`);
+		const name = getDate() + "_" + snapshot.hash.slice(0, 8);
 		const header =
 			JSON.stringify({
 				type: "upload",
-				payload: shareId,
+				channel_id: shareId,
+				payload: name,
 				sender_id: plugin.settings.senderId,
 			}) + "\n";
 		const encoder = new TextEncoder();
@@ -739,16 +783,101 @@ export async function upload(
 		packageBuffer.set(nameBytes, 2);
 		packageBuffer.set(new Uint8Array(fileData), 2 + nameBytes.length);
 
-		const key = pin && pin.length > 0 ? pin : plugin.settings.encryptionKey;
-		const encryptedData = await encryptBinary(packageBuffer.buffer, key);
+		const key = pin && pin.length > 0 ? pin : null;
+		let data: Uint8Array | null;
+		if (key) {
+			data = await encryptBinary(packageBuffer.buffer, key);
+		} else {
+			data = packageBuffer;
+		}
 
-		await writer.write(encryptedData);
+		if (data) {
+			await writer.write(data);
+		}
+		await writer.close();
+	} catch (e) {
+		console.error("[OPV] Error during file upload", e);
+		new Notice("Error during file upload.");
+	}
+	try {
+		const stream = await transport.createBidirectionalStream();
+		const writer = stream.writable.getWriter();
+		const encoder = new TextEncoder();
+		const key = pin && pin.length > 0 ? pin : null;
+
+		const manifestHeader =
+			JSON.stringify({
+				type: "upload",
+				channel_id: shareId,
+				payload: "manifest.json",
+				sender_id: plugin.settings.senderId,
+			}) + "\n";
+		console.debug(`[OPV] Manifest header: ${manifestHeader}`);
+		await writer.write(encoder.encode(manifestHeader));
+
+		let manifestData: Uint8Array | null;
+		if (key) {
+			manifestData = await encryptBinary(
+				encoder.encode(JSON.stringify(manifest)).buffer,
+				key,
+			);
+		} else {
+			manifestData = encoder.encode(JSON.stringify(manifest));
+		}
+
+		if (manifestData) {
+			await writer.write(manifestData);
+		}
 		await writer.close();
 
 		new Notice(`Completed upload of file: ${file.name}`);
 	} catch (e) {
-		console.error("Error during file upload", e);
-		new Notice("Error during file upload.");
+		console.error("[OPV] Error during manifest upload", e);
+		new Notice("Error during manifest upload.");
+	}
+	try {
+		const stream = await transport.createBidirectionalStream();
+		const writer = stream.writable.getWriter();
+		const encoder = new TextEncoder();
+		const key = pin && pin.length > 0 ? pin : null;
+
+		const path = plugin.syncHandler.getStatePath(file);
+		const name = `${getDate()}_${snapshot.hash.slice(0, 8)}.yjs`;
+		if (path && (await app.vault.adapter.exists(path))) {
+			const stateFile = await app.vault.adapter.readBinary(path);
+			const header =
+				JSON.stringify({
+					type: "upload",
+					channel_id: shareId,
+					payload: `${name}`,
+					sender_id: plugin.settings.senderId,
+				}) + "\n";
+			console.debug(`[OPV] State header: ${header}`);
+			await writer.write(encoder.encode(header));
+
+			const buffer = new Uint8Array(stateFile);
+
+			let data: Uint8Array | null;
+			if (key) {
+				data = await encryptBinary(buffer.buffer, key);
+			} else {
+				data = buffer;
+			}
+
+			if (data) {
+				await writer.write(data);
+			}
+			await writer.close();
+
+			new Notice(`Completed upload of file: ${file.name}`);
+		} else {
+			await writer.close();
+			console.debug(`[OPV] No state file found for: ${file.path}.`);
+			new Notice("Action could not be completed. Check console for details.");
+		}
+	} catch (e) {
+		console.error("[OPV] Error during manifest upload", e);
+		new Notice("Error during manifest upload.");
 	}
 }
 

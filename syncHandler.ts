@@ -23,8 +23,18 @@ import {
 	MarkdownView,
 	normalizePath,
 } from "obsidian";
-import { sendSecureMessage, sendRawJSON, leaveChannel } from "./transport";
-import { arrayBufferToBase64, base64ToArrayBuffer } from "./crypto";
+import {
+	sendSecureMessage,
+	sendRawJSON,
+	leaveChannel,
+	download,
+	getLatestSnapshot,
+} from "./transport";
+import {
+	arrayBufferToBase64,
+	base64ToArrayBuffer,
+	decryptBinary,
+} from "./crypto";
 import {
 	IOpVaultPlugin,
 	TransportPacket,
@@ -35,6 +45,7 @@ import {
 	AwarenessUpdate,
 	RemoteCursor,
 	AwarenessState,
+	Manifest,
 } from "./types";
 import { getFile } from "./utils";
 
@@ -54,7 +65,11 @@ export class SyncHandler {
 		this.plugin = plugin;
 	}
 
-	async startSync(file: TFile, group?: boolean): Promise<SharedItem | void> {
+	async startSync(
+		file: TFile,
+		checkState: boolean = false,
+		group?: boolean,
+	): Promise<SharedItem | void> {
 		if (openDocs.has(file.path)) return;
 
 		const sharedItem = this.plugin.settings.sharedItems.find(
@@ -64,7 +79,53 @@ export class SyncHandler {
 			console.error(`[OPV] No shared item found for path: ${file.path}`);
 			return;
 		}
-		// const key = sharedItem ? (sharedItem.pin || sharedItem.key) : this.plugin.settings.encryptionKey;
+
+		if (checkState) {
+			const buffer = await download(
+				this.plugin,
+				sharedItem.id,
+				"manifest.json",
+			);
+			if (!buffer) {
+				console.error("[OPV] Failed to download manifest");
+				new Notice("Failed to download manifest. Check console for details.");
+				return;
+			}
+
+			const key =
+				sharedItem.pin && sharedItem.pin.length > 0 ? sharedItem.pin : null;
+			let manifestBuffer: Uint8Array | null = null;
+			if (key) {
+				manifestBuffer = await decryptBinary(buffer, key);
+			} else {
+				manifestBuffer = buffer;
+			}
+
+			if (!manifestBuffer) {
+				console.error("[OPV] Failed to decrypt manifest");
+				new Notice("Failed to decrypt manifest.");
+				return;
+			}
+
+			const manifestJSON = new TextDecoder().decode(manifestBuffer);
+			const manifest = JSON.parse(manifestJSON) as Manifest;
+			console.debug(`[OPV] Received manifest for ${sharedItem.id}:`, manifest);
+			const latest =
+				manifest.snapshots[manifest.snapshots.length - 1].iteration;
+			const localManifest = this.plugin.manifests.get(sharedItem.id);
+			let localIteration = 0;
+			if (localManifest && localManifest.snapshots.length > 0) {
+				localIteration =
+					localManifest.snapshots[localManifest.snapshots.length - 1].iteration || 0;
+			}
+
+			this.plugin.manifests.set(sharedItem.id, manifest);
+
+			if (localIteration < latest) {
+				console.debug(`[OPV] Local file is out of date, downloading latest snapshot`);
+				await getLatestSnapshot(this.plugin, manifest, key, sharedItem.id);
+			}
+		}
 
 		const doc = new Y.Doc();
 		doc.clientID = this.hashString(this.plugin.settings.senderId);
@@ -668,7 +729,7 @@ export const cursorPlugin = (app: App) =>
 					const file = (leaf.view as MarkdownView).file;
 					if (file && openAwareness.has(file.path)) {
 						this.awareness = openAwareness.get(file.path);
-						
+
 						let debounceFrame: number | null = null;
 
 						const handler = ({

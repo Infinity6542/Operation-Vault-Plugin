@@ -1085,6 +1085,54 @@ export async function getLatestSnapshot(
 	}
 }
 
+export async function download(
+	plugin: IOpVaultPlugin,
+	shareId: string,
+	resource: string,
+): Promise<Uint8Array | undefined> {
+	if (!plugin.activeTransport || !plugin.activeWriter) {
+		console.error("[OPV] No active connection for download.");
+		new Notice("Action could not be completed. Check console for details.");
+		return;
+	}
+	const stream = await plugin.activeTransport.createBidirectionalStream();
+	const writer =
+		stream.writable.getWriter() as WritableStreamDefaultWriter<Uint8Array>;
+	const reader =
+		stream.readable.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+	const encoder = new TextEncoder();
+
+	const manifestHeader =
+		JSON.stringify({
+			type: "download",
+			channel_id: shareId,
+			payload: resource,
+			sender_id: plugin.settings.senderId,
+		}) + "\n";
+
+	await writer.write(encoder.encode(manifestHeader));
+	await writer.close();
+
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	while (true) {
+		const { value, done } = await reader.read();
+		if (done) break;
+		if (value) {
+			chunks.push(value);
+			length += value.length;
+		}
+	}
+
+	const buffer = new Uint8Array(length);
+	let offset = 0;
+	for (const chunk of chunks) {
+		buffer.set(chunk, offset);
+		offset += chunk.length;
+	}
+	return buffer;
+}
+
 export async function remove(plugin: IOpVaultPlugin, shareId: string) {
 	const transport = plugin.activeTransport;
 	const senderId = plugin.settings.senderId;

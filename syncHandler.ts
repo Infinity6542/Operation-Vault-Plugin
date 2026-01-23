@@ -29,6 +29,7 @@ import {
 	leaveChannel,
 	download,
 	getLatestSnapshot,
+	upload,
 } from "./transport";
 import {
 	arrayBufferToBase64,
@@ -46,6 +47,7 @@ import {
 	RemoteCursor,
 	AwarenessState,
 	Manifest,
+	Snapshot,
 } from "./types";
 import { getFile } from "./utils";
 
@@ -57,8 +59,8 @@ export class SyncHandler {
 	plugin: IOpVaultPlugin;
 	isRemoteUpdate: boolean = false;
 	awaitingSnapshot = new Set<string>();
-
 	saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	lastChanged = new Map<string, number>();
 
 	constructor(app: App, plugin: IOpVaultPlugin) {
 		this.app = app;
@@ -116,13 +118,16 @@ export class SyncHandler {
 			let localIteration = 0;
 			if (localManifest && localManifest.snapshots.length > 0) {
 				localIteration =
-					localManifest.snapshots[localManifest.snapshots.length - 1].iteration || 0;
+					localManifest.snapshots[localManifest.snapshots.length - 1]
+						.iteration || 0;
 			}
 
 			this.plugin.manifests.set(sharedItem.id, manifest);
 
 			if (localIteration < latest) {
-				console.debug(`[OPV] Local file is out of date, downloading latest snapshot`);
+				console.debug(
+					`[OPV] Local file is out of date, downloading latest snapshot`,
+				);
 				await getLatestSnapshot(this.plugin, manifest, key, sharedItem.id);
 			}
 		}
@@ -194,6 +199,59 @@ export class SyncHandler {
 
 		new Notice(`Sync started for ${file.name}`);
 		if (group) return sharedItem;
+	}
+
+	async snapshotLoop(shareItem: SharedItem) {
+		const delay = 10000 - (Date.now() % 10000);
+		setTimeout(() => {
+			void (async () => {
+				await this.snapshotCycle(shareItem);
+				setInterval(() => {
+					void (async () => {
+						await this.snapshotCycle(shareItem);
+					})();
+				}, 10000);
+			})();
+		}, delay);
+	}
+
+	private async snapshotCycle(shareItem: SharedItem) {
+		const users = Array.from(
+			this.plugin.channelUsers.get(shareItem.id) || [],
+		).sort();
+		if (users.length === 1 || users[0] == this.plugin.settings.senderId) {
+			console.debug(`[OPV] Updating snapshots for ${shareItem.path}`);
+			await this.snapshot(shareItem);
+		}
+	}
+
+	private async snapshot(shareItem: SharedItem) {
+		const id = shareItem.id;
+		const now = Date.now();
+		const lastChange = this.lastChanged.get(id) || 0;
+		const manifest = this.plugin.manifests.get(id);
+		if (!manifest) return;
+		const lastSnapshot =
+			manifest.snapshots[manifest.snapshots.length - 1].ctime;
+
+		if (lastChange <= lastSnapshot || now - lastChange < 10000) return;
+
+		const file = this.app.vault.getFileByPath(shareItem.path);
+		if (!file) return;
+		await this.takeSnapshot(shareItem, file);
+	}
+
+	async takeSnapshot(shareItem: SharedItem, file: TFile) {
+		const manifest = this.plugin.manifests.get(shareItem.id);
+		const snapshot: Snapshot = {
+			iteration: (manifest?.snapshots.length || 0) + 1,
+			hash: "",
+			size: 0,
+			senderId: this.plugin.settings.senderId,
+			ctime: Date.now(),
+		};
+		const pin = shareItem.pin && shareItem.pin.length > 0 ? shareItem.pin : "";
+		await upload(file, this.app, this.plugin, shareItem.id, pin, manifest, snapshot);
 	}
 
 	setupGlobalListeners() {
@@ -384,10 +442,16 @@ export class SyncHandler {
 	async applyUpdateToDoc(doc: Y.Doc, update: Uint8Array, path: string) {
 		this.isRemoteUpdate = true;
 		try {
+			const id = this.plugin.settings.sharedItems.find(
+				(p) => p.path === path,
+			)?.id;
+			if (!id) return;
 			Y.applyUpdate(doc, update, "remote");
 			console.debug(`[OPV] Applied Yjs update for ${path}`);
 
 			const newContent = doc.getText("content").toJSON();
+
+			this.lastChanged.set(id, Date.now());
 
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			let cursor = null;
@@ -472,13 +536,18 @@ export class SyncHandler {
 	}
 
 	handleLocalEdit(newContent: string, yText: Y.Text, path: string) {
-		if (this.isRemoteUpdate) return;
+		const id = this.plugin.settings.sharedItems.find(
+			(p) => p.path === path,
+		)?.id;
+		if (this.isRemoteUpdate || !id) return;
 		if (this.awaitingSnapshot.has(path)) {
 			console.debug(
 				`[OPV] Ignoring local edit for ${path} while awaiting snapshot`,
 			);
 			return;
 		}
+
+		this.lastChanged.set(id, Date.now());
 
 		const currentContent = yText.toJSON();
 		if (currentContent === newContent) return;

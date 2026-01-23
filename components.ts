@@ -15,7 +15,6 @@ import {
 	FolderMatch,
 	SyncGroup,
 	SharedItem,
-	UploadModal,
 	InnerMessage,
 } from "./types";
 import OpVaultPlugin, { generateUUID } from "./main";
@@ -243,13 +242,8 @@ export class ShareModal extends Modal {
 				createdAt: Date.now(),
 				shares: 0,
 			};
-			const uploadObject: UploadModal = {
-				file: file,
-				app: this.app,
-				plugin: this.plugin,
-			};
 			if (this.upload) {
-				await upload(uploadObject, newShare.id, newShare.key);
+				await upload(file, this.app, this.plugin, newShare.id, newShare.key);
 			}
 			this.plugin.settings.sharedItems.push(newShare);
 			await this.plugin.saveSettings();

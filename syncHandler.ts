@@ -67,12 +67,32 @@ export class SyncHandler {
 		this.plugin = plugin;
 	}
 
+	getDoc(path: string): Y.Doc | undefined {
+		return openDocs.get(path);
+	}
+
 	async startSync(
 		file: TFile,
 		checkState: boolean = false,
 		group?: boolean,
+		reSync: boolean = false,
 	): Promise<SharedItem | void> {
-		if (openDocs.has(file.path)) return;
+		if (openDocs.has(file.path)) {
+			if (reSync) {
+				console.debug(`[OPV] Re-syncing document: ${file.path}`);
+				const doc = openDocs.get(file.path);
+				if (doc) {
+					const stateVector = Y.encodeStateVector(doc);
+					await this.sendSyncMessage(file.path, "sync_vector", stateVector);
+				}
+				const awareness = openAwareness.get(file.path);
+				if (awareness && doc) {
+					const update = encodeAwarenessUpdate(awareness, [doc.clientID]);
+					void this.sendSyncMessage(file.path, "awareness", update);
+				}
+			}
+			return;
+		}
 
 		const sharedItem = this.plugin.settings.sharedItems.find(
 			(i) => i.path === file.path,
@@ -135,10 +155,8 @@ export class SyncHandler {
 		const doc = new Y.Doc();
 		doc.clientID = this.hashString(this.plugin.settings.senderId);
 		const yText = doc.getText("content");
-		openDocs.set(file.path, doc);
 
 		const awareness = new Awareness(doc);
-		openAwareness.set(file.path, awareness);
 
 		awareness.setLocalState({
 			user: {
@@ -161,12 +179,12 @@ export class SyncHandler {
 
 		const stateLoaded = await this.loadYjsState(file, doc);
 
+		openDocs.set(file.path, doc);
+		openAwareness.set(file.path, awareness);
+
 		this.awaitingSnapshot.add(file.path);
 		setTimeout(() => {
 			if (this.awaitingSnapshot.has(file.path)) {
-				console.debug(
-					`[OPV] Snapshot timeout for ${file.path}, hydrating/resuming local edits`,
-				);
 				this.awaitingSnapshot.delete(file.path);
 				// Force a check to catch up any edits made while waiting
 				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -177,9 +195,6 @@ export class SyncHandler {
 		}, 3000);
 
 		if (!stateLoaded) {
-			console.debug(
-				`[OPV] No Yjs state found for ${file.path}, will initialize after sync`,
-			);
 			this.triggerSaveState(file, doc);
 		} else {
 			console.debug(`[OPV] Loaded Yjs state for file: ${file.path}`);
@@ -251,7 +266,15 @@ export class SyncHandler {
 			ctime: Date.now(),
 		};
 		const pin = shareItem.pin && shareItem.pin.length > 0 ? shareItem.pin : "";
-		await upload(file, this.app, this.plugin, shareItem.id, pin, manifest, snapshot);
+		await upload(
+			file,
+			this.app,
+			this.plugin,
+			shareItem.id,
+			pin,
+			manifest,
+			snapshot,
+		);
 	}
 
 	setupGlobalListeners() {

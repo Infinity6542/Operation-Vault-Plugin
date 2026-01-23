@@ -6,8 +6,13 @@ export function getFile(app: App, path: string): TFile | null {
 	return file instanceof TFile ? file : null;
 }
 
-export function getDate(): string {
-	const now = new Date();
+export function getDate(ms?: number): string {
+	let now: Date;
+	if (ms) {
+		now = new Date(ms);
+	} else {
+		now = new Date();
+	}
 	const year = now.getFullYear();
 	const month = String(now.getMonth() + 1).padStart(2, "0");
 	const day = String(now.getDate()).padStart(2, "0");
@@ -16,3 +21,7 @@ export function getDate(): string {
 	const seconds = String(now.getSeconds()).padStart(2, "0");
 	return `${year}${month}${day}-${hours}${minutes}${seconds}`;
 }
+
+export const sleep = (ms: number): Promise<void> => {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+};

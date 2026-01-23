@@ -2,6 +2,8 @@ import type { InnerMessage } from "./types";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const eCache: Map<string, { key: CryptoKey; iv: Uint8Array }> = new Map();
+const dCache: Map<string, CryptoKey> = new Map();
 
 const SALT_LEN: number = 16;
 const IV_LEN: number = 12;
@@ -35,8 +37,15 @@ export async function encryptPacket(
 	data: InnerMessage,
 	secret: string,
 ): Promise<string> {
-	const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
-	const key = await getKey(secret, salt);
+	let key, salt;
+	if (eCache.has(secret)) {
+		salt = eCache.get(secret)!.iv;
+		key = eCache.get(secret)!.key;
+	} else {
+		salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
+		key = await getKey(secret, salt);
+		eCache.set(secret, { key, iv: salt });
+	}
 	const iv = window.crypto.getRandomValues(new Uint8Array(IV_LEN));
 	const jsonStr = JSON.stringify(data);
 
@@ -50,7 +59,7 @@ export async function encryptPacket(
 	);
 
 	const packageData = {
-		salt: arrayBufferToBase64(salt.buffer),
+		salt: arrayBufferToBase64(salt.buffer as ArrayBuffer),
 		iv: arrayBufferToBase64(iv.buffer),
 		data: arrayBufferToBase64(encrypted),
 	};
@@ -68,14 +77,19 @@ export async function decryptPacket(
 			iv: string;
 			data: string;
 		};
+		const cache = `${secret}::${pkg.salt}`;
+		let key = dCache.get(cache);
+		let iv;
+		if (!key) {
+			const salt = base64ToArrayBuffer(pkg.salt);
+			key = await getKey(secret, new Uint8Array(salt));
+			dCache.set(cache, key);
+		}
+		iv = base64ToArrayBuffer(pkg.iv);
 
 		if (!pkg.iv || !pkg.data || !pkg.salt) {
 			throw new Error("Invalid payload structure");
 		}
-
-		const salt = base64ToArrayBuffer(pkg.salt);
-		const iv = base64ToArrayBuffer(pkg.iv);
-		const key = await getKey(secret, new Uint8Array(salt));
 		const encryptedContent = base64ToArrayBuffer(pkg.data);
 
 		const decryptedBytes = await window.crypto.subtle.decrypt(
@@ -100,9 +114,16 @@ export async function encryptBinary(
 	keyStr: string,
 ): Promise<Uint8Array | null> {
 	try {
-		const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
+		let key, salt;
+		if (eCache.has(keyStr)) {
+			salt = eCache.get(keyStr)!.iv;
+			key = eCache.get(keyStr)!.key;
+		} else {
+			salt = window.crypto.getRandomValues(new Uint8Array(SALT_LEN));
+			key = await getKey(keyStr, salt);
+			eCache.set(keyStr, { key, iv: salt });
+		}
 		const iv = window.crypto.getRandomValues(new Uint8Array(IV_LEN));
-		const key = await getKey(keyStr, salt);
 
 		const encrypted = await window.crypto.subtle.encrypt(
 			{
@@ -136,7 +157,13 @@ export async function decryptBinary(
 		const iv = data.slice(SALT_LEN, SALT_LEN + IV_LEN);
 		const encrypted = data.slice(SALT_LEN + IV_LEN);
 
-		const key = await getKey(keyStr, salt);
+		const saltBase64 = arrayBufferToBase64(salt.buffer);
+		const cache = `${keyStr}::${saltBase64}`;
+		let key = dCache.get(cache);
+		if (!key) {
+			key = await getKey(keyStr, salt);
+			dCache.set(cache, key);
+		}
 		const decrypted = await window.crypto.subtle.decrypt(
 			{
 				name: "AES-GCM",

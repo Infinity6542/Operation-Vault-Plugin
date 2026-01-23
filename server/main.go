@@ -466,7 +466,7 @@ func upload(stream io.Reader, channel string, fileID string, ownerID string) err
 func getOwner(fileID string) (string, bool) {
 	head, err := s3Client.HeadObject(context.TODO(), &s3.HeadObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(fileID + "/" + fileID),
+		Key:    aws.String(fileID + "/manifest.json"),
 	})
 	if err != nil {
 		logger.Debugf("Failed to get metadata for file %s: %v", fileID, err)
@@ -504,16 +504,29 @@ func download(stream *webtransport.Stream, channel string, fileID string) error 
 	return nil
 }
 
-func remove(fileID string) error {
-	_, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+func remove(channelID string) error {
+	listOutput, err := s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(fileID),
+		Prefix: aws.String(channelID + "/"),
 	})
 	if err != nil {
-		logger.Errorf("Failed to delete file from S3: %v", err)
+		logger.Errorf("Failed to list objects for deletion: %v", err)
 		return err
 	}
-	logger.Infof("File %s deleted successfully from bucket %s", fileID, bucketName)
+
+	for _, object := range listOutput.Contents {
+		_, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    object.Key,
+		})
+		if err != nil {
+			logger.Errorf("Failed to delete object %s: %v", *object.Key, err)
+		} else {
+			logger.Infof("Deleted object %s", *object.Key)
+		}
+	}
+
+	logger.Infof("Channel folder %s deleted successfully from bucket %s", channelID, bucketName)
 	return nil
 }
 

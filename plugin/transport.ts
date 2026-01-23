@@ -11,7 +11,6 @@ import { sendFileChunked, conversion, receiveFile } from "./fileHandler";
 import type {
 	IOpVaultPlugin,
 	SharedItem,
-	UploadModal,
 	InnerMessage,
 	TransportPacket,
 	SyncMessage,
@@ -227,7 +226,8 @@ export async function sendRawJSON(
 		| { type: string; channel_id: string; sender_id: string; payload: string },
 ) {
 	try {
-		console.debug("[DBG] [OPV] Sending JSON:", JSON.stringify(data));
+		// Too verbose for prod
+		// console.debug("[DBG] [OPV] Sending JSON:", JSON.stringify(data));
 		const encoder = new TextEncoder();
 		await writer.write(encoder.encode(JSON.stringify(data) + "\n"));
 	} catch (e) {
@@ -719,37 +719,40 @@ async function handleIn(
 }
 
 export async function upload(
-	modal: UploadModal,
+	file: TFile,
+	app: App,
+	plugin: IOpVaultPlugin,
 	shareId: string,
 	pin?: string,
+	manifest?: Manifest,
+	snapshot?: Snapshot,
 ) {
-	const file = modal.file;
-	const app = modal.app;
-	const plugin = modal.plugin;
 	const transport = plugin.activeTransport;
-	const manifest: Manifest = {
-		version: 1,
-		owner: plugin.settings.senderId,
-		updatedAt: Date.now(),
-		updatedBy: plugin.settings.senderId,
-		snapshots: [],
-	};
-	const snapshot: Snapshot = {
-		iteration: 1,
-		hash: "",
-		size: file.stat.size,
-		senderId: plugin.settings.senderId,
-		ctime: Date.now(),
-	};
-	snapshot.hash = await getHash(await app.vault.readBinary(file));
-	manifest.snapshots.push(snapshot);
-	plugin.manifests.set(shareId, manifest);
-	const existingManifest = plugin.manifests.get(shareId);
-	if (existingManifest) {
-		snapshot.iteration =
-			existingManifest.snapshots[existingManifest?.snapshots.length - 1]
-				.iteration + 1;
+	const time = getDate();
+	if (!snapshot) {
+		snapshot = {
+			iteration: 1,
+			hash: "",
+			size: file.stat.size,
+			senderId: plugin.settings.senderId,
+			ctime: Date.now(),
+		};
 	}
+	if (!manifest) {
+		manifest = {
+			version: 1,
+			owner: plugin.settings.senderId,
+			updatedAt: Date.now(),
+			updatedBy: plugin.settings.senderId,
+			snapshots: [],
+		};
+	} else if (manifest.snapshots.length > 0) {
+		snapshot.iteration =
+			manifest.snapshots[manifest?.snapshots.length - 1].iteration + 1;
+	}
+	snapshot.hash = await getHash(await app.vault.readBinary(file));
+	plugin.manifests.set(shareId, manifest);
+	manifest.snapshots.push(snapshot);
 	if (!transport) return new Notice("No active connection.");
 
 	try {
@@ -760,7 +763,7 @@ export async function upload(
 		// reader is not used in upload
 		// const reader = stream.readable.getReader();
 
-		const name = getDate() + "_" + snapshot.hash.slice(0, 8);
+		const name = time + "_" + snapshot.hash.slice(0, 8);
 		const header =
 			JSON.stringify({
 				type: "upload",
@@ -842,7 +845,7 @@ export async function upload(
 		const key = pin && pin.length > 0 ? pin : null;
 
 		const path = plugin.syncHandler.getStatePath(file);
-		const name = `${getDate()}_${snapshot.hash.slice(0, 8)}.yjs`;
+		const name = `${time}_${snapshot.hash.slice(0, 8)}.yjs`;
 		if (path && (await app.vault.adapter.exists(path))) {
 			const stateFile = await app.vault.adapter.readBinary(path);
 			const header =
@@ -985,21 +988,13 @@ export async function getLatestSnapshot(
 
 	const base64String = arrayBufferToBase64(fileData.buffer);
 
-	// Determine where to save the file
 	let inboxPath = plugin.settings.inboxPath;
-	const existingItem = plugin.settings.sharedItems.find((i) => i.id === shareId);
+	const existingItem = plugin.settings.sharedItems.find(
+		(i) => i.id === shareId,
+	);
 
-	// If overwriting and item exists, use its path's parent folder as "inbox"
-	// effectively telling receiveFile to update that specific file if names match
 	if (overwrite && existingItem) {
 		const fullPath = existingItem.path;
-		// receiveFile uses inboxPath + filename.
-		// If we want to overwrite 'folder/file.md', we should pass 'folder/' as inboxPath
-		// and ensure filename matches 'file.md'.
-		// However, receiveFile has specific logic.
-		// Let's pass the exact logic:
-		// If overwrite is true, receiveFile checks if app.vault.getAbstractFileByPath(finalName) exists.
-		// We need to ensure finalName resolves to existingItem.path.
 		const lastSlash = fullPath.lastIndexOf("/");
 		if (lastSlash !== -1) {
 			inboxPath = fullPath.substring(0, lastSlash);
@@ -1020,10 +1015,7 @@ export async function getLatestSnapshot(
 		const statePath = plugin.syncHandler.getStatePath(path);
 		// If updating, we might want to preserve the pin from the existing item if not passed
 		const pin =
-			key ||
-			plugin.activeDownloads.get(shareId) ||
-			existingItem?.pin ||
-			"";
+			key || plugin.activeDownloads.get(shareId) || existingItem?.pin || "";
 
 		const stateBuffer = await download(
 			plugin,

@@ -299,6 +299,10 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 						this.settings.senderId,
 						this.settings.nickname,
 					);
+					const file = this.app.vault.getAbstractFileByPath(item.path);
+					if (file instanceof TFile) {
+						await this.syncHandler.startSync(file, false, false, true);
+					}
 				}
 				for (const group of this.settings.syncGroups) {
 					await joinChannel(
@@ -307,6 +311,17 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 						this.settings.senderId,
 						this.settings.nickname,
 					);
+					for (const item of group.files) {
+						const localItem = this.settings.sharedItems.find(
+							(i) => i.id === item.id,
+						);
+						if (localItem) {
+							const file = this.app.vault.getAbstractFileByPath(localItem.path);
+							if (file instanceof TFile) {
+								await this.syncHandler.startSync(file, false, false, true);
+							}
+						}
+					}
 				}
 				await startHeartbeats(
 					this,

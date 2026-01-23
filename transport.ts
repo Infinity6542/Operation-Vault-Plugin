@@ -1,3 +1,4 @@
+import * as Y from "yjs";
 import { Notice, App, TFile } from "obsidian";
 import {
 	encryptPacket,
@@ -363,9 +364,16 @@ async function handleIn(
 		key = "";
 	}
 
+	console.debug(
+		`[OPV] Received packet type ${message.type} for ${message.channel_id} from ${message.sender_id}`,
+	);
+
 	const decrypted = await decryptPacket(message.payload, key);
 	if (!decrypted || !decrypted.type) {
-		console.error("[OPV] Empty decrypted content", decrypted);
+		console.error(
+			`[OPV] Empty decrypted content or decryption failed for ${message.channel_id}`,
+			decrypted,
+		);
 		return;
 	}
 
@@ -726,9 +734,11 @@ export async function upload(
 	pin?: string,
 	manifest?: Manifest,
 	snapshot?: Snapshot,
+	yjsState?: Uint8Array,
 ) {
 	const transport = plugin.activeTransport;
-	const time = getDate();
+	const fileData = await app.vault.readBinary(file);
+
 	if (!snapshot) {
 		snapshot = {
 			iteration: 1,
@@ -738,6 +748,9 @@ export async function upload(
 			ctime: Date.now(),
 		};
 	}
+
+	const time = getDate(snapshot.ctime);
+
 	if (!manifest) {
 		manifest = {
 			version: 1,
@@ -750,7 +763,8 @@ export async function upload(
 		snapshot.iteration =
 			manifest.snapshots[manifest?.snapshots.length - 1].iteration + 1;
 	}
-	snapshot.hash = await getHash(await app.vault.readBinary(file));
+	snapshot.hash = await getHash(fileData);
+	snapshot.size = fileData.byteLength;
 	plugin.manifests.set(shareId, manifest);
 	manifest.snapshots.push(snapshot);
 	if (!transport) return new Notice("No active connection.");
@@ -775,7 +789,6 @@ export async function upload(
 		console.debug(`[OPV] Upload header: ${header}`);
 		await writer.write(encoder.encode(header));
 
-		const fileData = await app.vault.readBinary(file);
 		const nameBytes = encoder.encode(file.name);
 
 		const totalSize = 2 + nameBytes.length + fileData.byteLength;
@@ -846,41 +859,49 @@ export async function upload(
 
 		const path = plugin.syncHandler.getStatePath(file);
 		const name = `${time}_${snapshot.hash.slice(0, 8)}.yjs`;
-		if (path && (await app.vault.adapter.exists(path))) {
-			const stateFile = await app.vault.adapter.readBinary(path);
-			const header =
-				JSON.stringify({
-					type: "upload",
-					channel_id: shareId,
-					payload: `${name}`,
-					sender_id: plugin.settings.senderId,
-				}) + "\n";
-			console.debug(`[OPV] State header: ${header}`);
-			await writer.write(encoder.encode(header));
+		let stateFile: ArrayBuffer;
 
-			const buffer = new Uint8Array(stateFile);
-
-			let data: Uint8Array | null;
-			if (key) {
-				data = await encryptBinary(buffer.buffer, key);
-			} else {
-				data = buffer;
-			}
-
-			if (data) {
-				await writer.write(data);
-			}
-			await writer.close();
-
-			new Notice(`Completed upload of file: ${file.name}`);
+		if (yjsState) {
+			stateFile = yjsState.buffer as ArrayBuffer;
+		} else if (path && (await app.vault.adapter.exists(path))) {
+			stateFile = await app.vault.adapter.readBinary(path);
 		} else {
-			await writer.close();
-			console.debug(`[OPV] No state file found for: ${file.path}.`);
-			new Notice("Action could not be completed. Check console for details.");
+			console.debug(
+				`[OPV] No state file found for: ${file.path}, creating one.`,
+			);
+			const doc = new Y.Doc();
+			const yText = doc.getText("content");
+			yText.insert(0, new TextDecoder().decode(fileData));
+			stateFile = Y.encodeStateAsUpdate(doc).buffer as ArrayBuffer;
 		}
+		const header =
+			JSON.stringify({
+				type: "upload",
+				channel_id: shareId,
+				payload: `${name}`,
+				sender_id: plugin.settings.senderId,
+			}) + "\n";
+		console.debug(`[OPV] State header: ${header}`);
+		await writer.write(encoder.encode(header));
+
+		const buffer = new Uint8Array(stateFile);
+
+		let data: Uint8Array | null;
+		if (key) {
+			data = await encryptBinary(buffer.buffer, key);
+		} else {
+			data = buffer;
+		}
+
+		if (data) {
+			await writer.write(data);
+		}
+		await writer.close();
+
+		new Notice(`Completed upload of file: ${file.name}`);
 	} catch (e) {
-		console.error("[OPV] Error during manifest upload", e);
-		new Notice("Error during manifest upload.");
+		console.error("[OPV] Error during state file upload", e);
+		new Notice("Error during state file upload.");
 	}
 }
 
@@ -904,10 +925,18 @@ export async function requestFile(
 		plugin.settings.nickname,
 	);
 
+	// Wait up to 3 seconds for the user list to arrive from the server
+	let attempts = 0;
+	while (plugin.channelUsers.get(shareId) === undefined && attempts < 30) {
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		attempts++;
+	}
+
 	if (
 		plugin.channelUsers.has(shareId) &&
 		plugin.channelUsers.get(shareId)!.size > 1
 	) {
+		console.debug(`[OPV] Fetching file from peers.`);
 		await sendSecureMessage(
 			plugin.activeWriter,
 			shareId,
@@ -920,6 +949,7 @@ export async function requestFile(
 			pin || "",
 		);
 	} else {
+		console.debug(`[OPV] Fetching file directly from cloud.`);
 		const buffer = await download(plugin, shareId, "manifest.json");
 		if (!buffer) {
 			console.error("[OPV] Failed to download manifest");
@@ -961,7 +991,7 @@ export async function getLatestSnapshot(
 	const snapshotBuffer = await download(
 		plugin,
 		shareId,
-		`${latest.ctime}_${latest.hash.slice(0, 8)}`,
+		`${getDate(latest.ctime)}_${latest.hash.slice(0, 8)}`,
 	);
 
 	let file: Uint8Array | null = null;
@@ -1013,14 +1043,13 @@ export async function getLatestSnapshot(
 
 	if (path) {
 		const statePath = plugin.syncHandler.getStatePath(path);
-		// If updating, we might want to preserve the pin from the existing item if not passed
 		const pin =
 			key || plugin.activeDownloads.get(shareId) || existingItem?.pin || "";
 
 		const stateBuffer = await download(
 			plugin,
 			shareId,
-			`${latest.ctime}_${latest.hash.slice(0, 8)}.yjs`,
+			`${getDate(latest.ctime)}_${latest.hash.slice(0, 8)}.yjs`,
 		);
 
 		if (stateBuffer) {
@@ -1064,12 +1093,15 @@ export async function getLatestSnapshot(
 
 		plugin.activeDownloads.delete(shareId);
 
-		const tFile = plugin.app.vault.getAbstractFileByPath(path);
+		// Sanitize path (remove leading slash)
+		const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+		const tFile = plugin.app.vault.getAbstractFileByPath(cleanPath);
+
+		console.debug(
+			`[OPV] Starting sync for ${cleanPath}, TFile found: ${!!tFile}`,
+		);
+
 		if (tFile instanceof TFile) {
-			// If we just updated, we might need to reload the Yjs doc in SyncHandler
-			// But SyncHandler.startSync usually handles checking if doc exists.
-			// If doc exists, we might need to re-apply the new state from disk.
-			// For now, let's just ensure startSync is called.
 			await plugin.syncHandler.startSync(tFile);
 		}
 	} else {
@@ -1125,6 +1157,7 @@ export async function download(
 	return buffer;
 }
 
+// TODO: Queue removals while offline
 export async function remove(plugin: IOpVaultPlugin, shareId: string) {
 	const transport = plugin.activeTransport;
 	const senderId = plugin.settings.senderId;

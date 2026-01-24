@@ -62,6 +62,7 @@ export class SyncHandler {
 	awaitingSnapshot = new Set<string>();
 	saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	lastChanged = new Map<string, number>();
+	snapshotTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	constructor(app: App, plugin: IOpVaultPlugin) {
 		this.app = app;
@@ -244,17 +245,23 @@ export class SyncHandler {
 	}
 
 	snapshotLoop(shareItem: SharedItem) {
+		if (this.snapshotTimers.has(shareItem.id)) {
+			clearTimeout(this.snapshotTimers.get(shareItem.id));
+		}
 		const delay = 10000 - (Date.now() % 10000);
-		setTimeout(() => {
+		const startTimer = setTimeout(() => {
 			void (async () => {
 				await this.snapshotCycle(shareItem);
-				setInterval(() => {
+				const interval = setInterval(() => {
 					void (async () => {
 						await this.snapshotCycle(shareItem);
 					})();
 				}, 10000);
+
+				this.snapshotTimers.set(shareItem.id, interval);
 			})();
 		}, delay);
+		this.snapshotTimers.set(shareItem.id, startTimer);
 	}
 
 	private async snapshotCycle(shareItem: SharedItem) {
@@ -334,7 +341,6 @@ export class SyncHandler {
 		} else {
 			snapshot = manifest.snapshots[iteration - 1];
 		}
-		snapshot = manifest.snapshots[iteration - 1];
 		if (!snapshot) return { stateBuffer: undefined, contentBuffer: undefined };
 
 		let contentBuffer = await download(
@@ -738,6 +744,12 @@ export class SyncHandler {
 			clearTimeout(timer);
 		}
 		this.saveTimers.clear();
+
+		for (const timer of this.snapshotTimers.values()) {
+			clearTimeout(timer);
+			clearInterval(timer);
+		}
+		this.snapshotTimers.clear();
 
 		for (const doc of openDocs.values()) {
 			doc.destroy();

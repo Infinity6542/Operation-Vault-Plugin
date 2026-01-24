@@ -82,11 +82,12 @@ export class HistoryView extends ItemView {
 		const list = container.createEl("div");
 		[...manifest.snapshots].reverse().forEach((snapshot) => {
 			const itemDiv = list.createEl("div", { cls: "opv-history-item" });
+            const textDiv = itemDiv.createEl("div", { cls: "opv-history-text" });
 			itemDiv.classList.add("opv-snapshot");
-			itemDiv.createEl("div", {
+			textDiv.createEl("div", {
 				text: `v${snapshot.iteration} - ${new Date(snapshot.ctime).toLocaleString()}`,
 			});
-			itemDiv.createEl("small", {
+			textDiv.createEl("small", {
 				text: `Size: ${(snapshot.size / 1024).toFixed(2)} KB`,
 			});
 

@@ -298,6 +298,19 @@ export class SyncHandler {
 			manifest,
 			snapshot,
 		);
+
+		this.app.workspace.trigger("opv:snapshot-created", shareItem.id);
+		const msg: InnerMessage = {
+			type: "manifest_update",
+			content: JSON.stringify(manifest),
+		};
+		await sendSecureMessage(
+			this.plugin.activeWriter!,
+			shareItem.id,
+			this.plugin.settings.senderId,
+			msg,
+			shareItem.pin || "",
+		);
 	}
 
 	async restoreSnapshot(shareItem: SharedItem, iteration: number) {

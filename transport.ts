@@ -380,10 +380,6 @@ async function handleIn(
 	// console.debug(`[OPV] Received something: ${decrypted.type}`);
 
 	switch (decrypted.type) {
-		case "chat":
-			new Notice(`From peer: ${decrypted.content}`);
-			console.debug("[OPV] Chat message:", decrypted.content);
-			break;
 		case "file_start":
 			if (!decrypted.fileId) {
 				console.error("[OPV] Empty decrypted content", decrypted);

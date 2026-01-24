@@ -20,7 +20,6 @@ export interface IOpVaultPlugin {
 
 export interface InnerMessage {
 	type:
-		| "chat"
 		| "file_start"
 		| "file_chunk"
 		| "file_end"

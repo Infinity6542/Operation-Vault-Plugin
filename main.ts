@@ -7,6 +7,7 @@ import {
 	Setting,
 	TFolder,
 	TFile,
+	WorkspaceLeaf,
 } from "obsidian";
 import {
 	connect,
@@ -25,6 +26,7 @@ import type {
 	Manifest,
 } from "./types";
 import { FolderSelector, ShareModal, DownloadModal } from "./components";
+import { HistoryView, VIEW_TYPE_HISTORY } from "./views";
 
 export type { SharedItem };
 
@@ -275,7 +277,33 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			}),
 		);
 
+		this.registerView(VIEW_TYPE_HISTORY, (leaf) => new HistoryView(leaf, this));
+
+		this.addCommand({
+			id: "open-history-view",
+			name: "Open version history view",
+			callback: async () => {
+				await this.activateView();
+			},
+		});
+
 		await this.tryConnect();
+	}
+
+	async activateView() {
+		const { workspace } = this.app;
+		let leaf: WorkspaceLeaf | null = null;
+		const leaves = workspace.getLeavesOfType(VIEW_TYPE_HISTORY);
+		if (leaves.length > 0) {
+			leaf = leaves[0];
+		} else {
+			leaf = workspace.getRightLeaf(false);
+			if (leaf) {
+				await leaf.setViewState({ type: VIEW_TYPE_HISTORY, active: true });
+			}
+		}
+
+		if (leaf) await workspace.revealLeaf(leaf);
 	}
 
 	async tryConnect() {

@@ -131,6 +131,10 @@ export class SyncHandler {
 			}
 
 			const manifestJSON = new TextDecoder().decode(manifestBuffer);
+			if (!manifestJSON) {
+				console.warn(`[OPV] Empty manifest JSON for ${sharedItem.id}`);
+				return;
+			}
 			const manifest = JSON.parse(manifestJSON) as Manifest;
 			console.debug(`[OPV] Received manifest for ${sharedItem.id}:`, manifest);
 			const latest =
@@ -313,9 +317,16 @@ export class SyncHandler {
 		);
 	}
 
-	async restoreSnapshot(shareItem: SharedItem, iteration: number) {
+	async getSnapshot(
+		shareItem: SharedItem,
+		iteration: number,
+	): Promise<{
+		stateBuffer: Uint8Array | undefined;
+		contentBuffer: Uint8Array | undefined;
+	}> {
 		const manifest = this.plugin.manifests.get(shareItem.id);
-		if (!manifest || manifest.snapshots.length === 0) return;
+		if (!manifest || manifest.snapshots.length === 0)
+			return { stateBuffer: undefined, contentBuffer: undefined };
 
 		let snapshot;
 		if (iteration === undefined) {
@@ -324,7 +335,7 @@ export class SyncHandler {
 			snapshot = manifest.snapshots[iteration - 1];
 		}
 		snapshot = manifest.snapshots[iteration - 1];
-		if (!snapshot) return;
+		if (!snapshot) return { stateBuffer: undefined, contentBuffer: undefined };
 
 		let contentBuffer = await download(
 			this.plugin,
@@ -335,9 +346,8 @@ export class SyncHandler {
 		let stateBuffer = await download(
 			this.plugin,
 			shareItem.id,
-			`${getDate(snapshot.ctime)}_${snapshot.hash.slice(0, 8)}`,
+			`${getDate(snapshot.ctime)}_${snapshot.hash.slice(0, 8)}.yjs`,
 		);
-
 
 		const key = shareItem.pin && shareItem.pin.length > 0 ? shareItem.pin : "";
 		if (key && stateBuffer instanceof Uint8Array) {
@@ -348,17 +358,21 @@ export class SyncHandler {
 			const decrypted = await decryptBinary(contentBuffer, key);
 			if (decrypted) contentBuffer = decrypted;
 		}
+		return { stateBuffer: stateBuffer, contentBuffer: contentBuffer };
+	}
 
+	async restoreSnapshot(shareItem: SharedItem, iteration: number) {
+		const { stateBuffer, contentBuffer } = await this.getSnapshot(
+			shareItem,
+			iteration,
+		);
 		if (!stateBuffer || !contentBuffer) {
 			new Notice("Failed to complete action. Check console for details.");
 			console.error(
 				"[OPV] Something went terribly wrong while restoring snapshot",
 				contentBuffer,
 				stateBuffer,
-				key,
-				snapshot,
 				iteration,
-				manifest,
 			);
 			return;
 		}
@@ -367,19 +381,18 @@ export class SyncHandler {
 		const fileData = contentBuffer.slice(2 + nameLen);
 		const content = arrayBufferToBase64(fileData.buffer);
 
-		const path = shareItem.path.substring(0, shareItem.path.lastIndexOf("/") );
-		const filename = shareItem.path.substring(shareItem.path.lastIndexOf("/") + 1);
-		await receiveFile(
-			this.app,
-			filename,
-			content,
-			path,
-			true
-		)
+		const path = shareItem.path.substring(0, shareItem.path.lastIndexOf("/"));
+		const filename = shareItem.path.substring(
+			shareItem.path.lastIndexOf("/") + 1,
+		);
+		await receiveFile(this.app, filename, content, path, true);
 
 		if (stateBuffer) {
 			const statePath = this.getStatePath(shareItem.path);
-			await this.app.vault.adapter.writeBinary(statePath, stateBuffer.buffer as ArrayBuffer);
+			await this.app.vault.adapter.writeBinary(
+				statePath,
+				stateBuffer.buffer as ArrayBuffer,
+			);
 		}
 
 		const doc = openDocs.get(shareItem.path);

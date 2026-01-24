@@ -49,7 +49,8 @@ import {
 	Manifest,
 	Snapshot,
 } from "./types";
-import { getFile } from "./utils";
+import { receiveFile } from "./fileHandler";
+import { getFile, getDate } from "./utils";
 
 const openDocs = new Map<string, Y.Doc>();
 const openAwareness = new Map<string, Awareness>();
@@ -202,21 +203,43 @@ export class SyncHandler {
 
 		doc.on("update", (update: Uint8Array, origin: string) => {
 			this.triggerSaveState(file, doc);
-
 			if (origin === "remote" || origin === "local-load") return;
-
 			void this.sendSyncMessage(file.path, "sync_update", update);
 		});
 
-		// Send state vector to request peer's state
 		const stateVector = Y.encodeStateVector(doc);
 		await this.sendSyncMessage(file.path, "sync_vector", stateVector);
+
+		try {
+			if (!this.plugin.manifests.has(sharedItem.id)) {
+				const buffer = await download(
+					this.plugin,
+					sharedItem.id,
+					"manifest.json",
+				);
+				if (buffer) {
+					const key = sharedItem.pin || sharedItem.key || null;
+					let manifestBuffer = buffer;
+					if (key) {
+						const decrypted = await decryptBinary(buffer, key);
+						if (decrypted) manifestBuffer = decrypted;
+					}
+					const manifest = JSON.parse(
+						new TextDecoder().decode(manifestBuffer),
+					) as Manifest;
+					this.plugin.manifests.set(sharedItem.id, manifest);
+					console.debug(`[OPV] Loaded manifest for ${sharedItem.id}`);
+				}
+			}
+		} finally {
+			this.snapshotLoop(sharedItem);
+		}
 
 		new Notice(`Sync started for ${file.name}`);
 		if (group) return sharedItem;
 	}
 
-	async snapshotLoop(shareItem: SharedItem) {
+	snapshotLoop(shareItem: SharedItem) {
 		const delay = 10000 - (Date.now() % 10000);
 		setTimeout(() => {
 			void (async () => {
@@ -248,7 +271,6 @@ export class SyncHandler {
 		if (!manifest) return;
 		const lastSnapshot =
 			manifest.snapshots[manifest.snapshots.length - 1].ctime;
-
 		if (lastChange <= lastSnapshot || now - lastChange < 10000) return;
 
 		const file = this.app.vault.getFileByPath(shareItem.path);
@@ -257,6 +279,7 @@ export class SyncHandler {
 	}
 
 	async takeSnapshot(shareItem: SharedItem, file: TFile) {
+		console.debug(`[OPV] Taking snapshot for ${shareItem.path}`);
 		const manifest = this.plugin.manifests.get(shareItem.id);
 		const snapshot: Snapshot = {
 			iteration: (manifest?.snapshots.length || 0) + 1,
@@ -275,6 +298,81 @@ export class SyncHandler {
 			manifest,
 			snapshot,
 		);
+	}
+
+	async restoreSnapshot(shareItem: SharedItem, iteration: number) {
+		const manifest = this.plugin.manifests.get(shareItem.id);
+		if (!manifest || manifest.snapshots.length === 0) return;
+
+		let snapshot;
+		if (iteration === undefined) {
+			snapshot = manifest.snapshots[manifest.snapshots.length - 1];
+		} else {
+			snapshot = manifest.snapshots[iteration - 1];
+		}
+		snapshot = manifest.snapshots[iteration - 1];
+		if (!snapshot) return;
+
+		let contentBuffer = await download(
+			this.plugin,
+			shareItem.id,
+			`${getDate(snapshot.ctime)}_${snapshot.hash.slice(0, 8)}`,
+		);
+
+		let stateBuffer = await download(
+			this.plugin,
+			shareItem.id,
+			`${getDate(snapshot.ctime)}_${snapshot.hash.slice(0, 8)}`,
+		);
+
+
+		const key = shareItem.pin && shareItem.pin.length > 0 ? shareItem.pin : "";
+		if (key && stateBuffer instanceof Uint8Array) {
+			const decrypted = await decryptBinary(stateBuffer, key);
+			if (decrypted) stateBuffer = decrypted;
+		}
+		if (key && contentBuffer instanceof Uint8Array) {
+			const decrypted = await decryptBinary(contentBuffer, key);
+			if (decrypted) contentBuffer = decrypted;
+		}
+
+		if (!stateBuffer || !contentBuffer) {
+			new Notice("Failed to complete action. Check console for details.");
+			console.error(
+				"[OPV] Something went terribly wrong while restoring snapshot",
+				contentBuffer,
+				stateBuffer,
+				key,
+				snapshot,
+				iteration,
+				manifest,
+			);
+			return;
+		}
+
+		const nameLen = contentBuffer[0] | (contentBuffer[1] << 8);
+		const fileData = contentBuffer.slice(2 + nameLen);
+		const content = arrayBufferToBase64(fileData.buffer);
+
+		const path = shareItem.path.substring(0, shareItem.path.lastIndexOf("/") );
+		const filename = shareItem.path.substring(shareItem.path.lastIndexOf("/") + 1);
+		await receiveFile(
+			this.app,
+			filename,
+			content,
+			path,
+			true
+		)
+
+		if (stateBuffer) {
+			const statePath = this.getStatePath(shareItem.path);
+			await this.app.vault.adapter.writeBinary(statePath, stateBuffer.buffer as ArrayBuffer);
+		}
+
+		const doc = openDocs.get(shareItem.path);
+		if (doc && stateBuffer) {
+			Y.applyUpdate(doc, stateBuffer, "local-load");
+		}
 	}
 
 	setupGlobalListeners() {

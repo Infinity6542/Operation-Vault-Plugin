@@ -64,3 +64,9 @@
 .cm-widgetBuffer {
     position: relative;
 }
+
+.opv-snapshot {
+    margin-bottom: 10px;
+    border-bottom: 1px solid var (--background-modifier-border);
+    padding-bottom: 5px;
+}

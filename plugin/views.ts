@@ -1,9 +1,4 @@
-import {
-	ItemView,
-	WorkspaceLeaf,
-	Notice,
-	ButtonComponent,
-} from "obsidian";
+import { ItemView, WorkspaceLeaf, Notice, ButtonComponent } from "obsidian";
 import OpVaultPlugin from "./main";
 
 export const VIEW_TYPE_HISTORY = "opv-history-view";
@@ -31,10 +26,23 @@ export class HistoryView extends ItemView {
 	async onOpen() {
 		await this.updateView();
 		this.registerEvent(
-			this.app.workspace.on(
-				"active-leaf-change",
-				async () => await this.updateView(),
-			),
+			this.app.workspace.on("active-leaf-change", () => {
+				void (async () => await this.updateView())();
+			}),
+		);
+
+		this.registerEvent(
+			this.app.workspace.on("opv:snapshot-created", (shareId: string) => {
+				void (async () => {
+					const file = this.app.workspace.getActiveFile();
+					const currentItem = this.plugin.settings.sharedItems.find(
+						(i) => i.path === file?.path,
+					);
+					if (currentItem && currentItem.id == shareId) {
+						await this.updateView();
+					}
+				})();
+			}),
 		);
 	}
 

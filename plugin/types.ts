@@ -1,6 +1,16 @@
 import { App, EventRef, TFile, TFolder, SearchResult } from "obsidian";
 import { SyncHandler } from "./syncHandler";
 
+declare module "obsidian" {
+	interface Workspace {
+		on(
+			name: "opv:snapshot-created",
+			callback: (shareId: string) => void,
+		): EventRef;
+		trigger(name: "opv:snapshot-created", shareId: string): void;
+	}
+}
+
 export interface IOpVaultPlugin {
 	settings: PluginSettings;
 	app: App;
@@ -33,7 +43,8 @@ export interface InnerMessage {
 		| "sync_update"
 		| "group_get"
 		| "group_info"
-		| "awareness";
+		| "awareness"
+		| "manifest_update";
 	content?: string;
 	filename?: string;
 	fileId?: string;

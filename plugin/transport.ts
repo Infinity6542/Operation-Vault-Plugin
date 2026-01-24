@@ -717,6 +717,22 @@ async function handleIn(
 			}
 			break;
 		}
+		case "manifest_update": {
+			try {
+				const manifest = JSON.parse(decrypted.content as string) as Manifest;
+				plugin.manifests.set(message.channel_id, manifest);
+				console.debug(
+					`[OPV] Updated manifest for shared item: ${message.channel_id}`,
+				);
+				plugin.app.workspace.trigger(
+					"opv:snapshot-created",
+					message.channel_id
+				);
+			} catch (e) {
+				console.error("[OPV] Error parsing manifest update payload", e);
+			}
+			break;
+		}
 		default:
 			console.error("[OPV] Unknown message type:", decrypted.type);
 	}

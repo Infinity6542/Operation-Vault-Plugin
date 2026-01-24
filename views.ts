@@ -1,4 +1,10 @@
-import { ItemView, WorkspaceLeaf, Notice, ButtonComponent } from "obsidian";
+import {
+	ItemView,
+	WorkspaceLeaf,
+	Notice,
+	ButtonComponent,
+	TFile,
+} from "obsidian";
 import OpVaultPlugin from "./main";
 
 export const VIEW_TYPE_HISTORY = "opv-history-view";
@@ -87,6 +93,30 @@ export class HistoryView extends ItemView {
 			const btnContainer = itemDiv.createEl("div", {
 				cls: "opv-history-buttons",
 			});
+			new ButtonComponent(btnContainer)
+				.setButtonText("Preview")
+				.onClick(async () => {
+					new Notice(`Retrieving version ${snapshot.iteration} for preview...`);
+					const { contentBuffer } = await this.plugin.syncHandler.getSnapshot(
+						sharedItem,
+						snapshot.iteration,
+					);
+					if (!contentBuffer)
+						return new Notice("Failed to retrieve snapshot content.");
+					const previewPath = "opv-preview.md";
+						await this.app.vault.adapter.write(
+							previewPath,
+							new TextDecoder().decode(contentBuffer),
+						);
+                    const file = this.app.vault.getAbstractFileByPath(previewPath);
+					if (file instanceof TFile) {
+						const leaf = this.app.workspace.getLeaf("split", "vertical");
+						await leaf.openFile(file, { state: { mode: "preview" } });
+						new Notice(`Previewing version ${snapshot.iteration} in new pane.`);
+					} else {
+						new Notice("Failed to create preview file.");
+					}
+				});
 			new ButtonComponent(btnContainer)
 				.setButtonText("Restore")
 				.setClass("mod-warning")

@@ -134,21 +134,23 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 		this.registerEditorExtension(cursorPlugin(this.app));
 
 		this.registerEvent(
-			this.app.workspace.on("file-open", async (file) => {
-				if (!file) return;
+			this.app.workspace.on("file-open", (file) => {
+				void (async () => {
+					if (!file) return;
 
-				const shareObjects = this.settings.sharedItems.filter(
-					(item) => item.path === file.path,
-				);
-
-				for (let i = 0; i < shareObjects.length; i++) {
-					console.debug(
-						`[OPV] File opened is shared: ${file.path} (${i + 1}/${
-							shareObjects.length
-						})`,
+					const shareObjects = this.settings.sharedItems.filter(
+						(item) => item.path === file.path,
 					);
-					await this.syncHandler.startSync(file);
-				}
+
+					for (let i = 0; i < shareObjects.length; i++) {
+						console.debug(
+							`[OPV] File opened is shared: ${file.path} (${i + 1}/${
+								shareObjects.length
+							})`,
+						);
+						await this.syncHandler.startSync(file);
+					}
+				})();
 			}),
 		);
 

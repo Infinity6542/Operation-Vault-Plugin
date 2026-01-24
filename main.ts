@@ -389,8 +389,20 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 	}
 
 	onunload() {
+		console.debug("[OPV] Unloading client...");
 		void disconnect(this).then(() => {
-			console.debug("[OPV] We're done here... Bye bye :)");
+			console.debug("[OPV] Disconnected from server.");
+		});
+
+		const preview = this.app.vault.getAbstractFileByPath("opv-preview.md");
+		if (preview) {
+			this.app.vault.adapter.remove("opv-preview.md").catch((e) => {
+				console.error("[OPV] Failed to remove preview file:", e);
+			});
+		}
+
+		this.app.workspace.getLeavesOfType(VIEW_TYPE_HISTORY).forEach((leaf) => {
+			leaf.detach();
 		});
 	}
 }

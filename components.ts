@@ -204,24 +204,59 @@ export class ShareModal extends Modal {
 		// 	.setDesc("Store offline and offsite.")
 		// 	.addToggle((toggle) => toggle.onChange((v) => (this.upload = v)));
 
-		new Setting(contentEl).addButton((btn) => {
+		let final = new Setting(contentEl);
+		final.addButton((btn) => {
+			btn
+				.setButtonText(
+					this.mode === "file" ? "Create share link" : "Create group link",
+				)
+				.setCta()
+				.onClick(async () => {
+					let id;
+					if (this.mode === "file") {
+						id = await this.createShare();
+					} else {
+						id = await this.createSyncGroup(this.item);
+					}
+					if (!(id && typeof id === "string"))
+						return new Notice("Failed to create share.");
+					const link = `obsidian://opv?action=join&id=${id}`;
+					await navigator.clipboard.writeText(link);
+					new Notice(
+						`Shared ${id}. The ${
+							this.mode === "file" ? "share ID" : "group ID"
+						} has been copied to your clipboard.`,
+					);
+					this.close();
+				});
+		});
+		final.addButton((btn) => {
 			btn
 				.setButtonText(
 					this.mode === "file" ? "Create share" : "Create sync group",
 				)
 				.setCta()
 				.onClick(async () => {
+					let id;
 					if (this.mode === "file") {
-						await this.createShare();
+						id = await this.createShare();
 					} else {
-						await this.createSyncGroup(this.item);
+						id = await this.createSyncGroup(this.item);
 					}
+					if (!(id && typeof id === "string"))
+						return new Notice("Failed to create share.");
+					await navigator.clipboard.writeText(id);
+					new Notice(
+						`Shared ${id}. The ${
+							this.mode === "file" ? "share ID" : "group ID"
+						} has been copied to your clipboard.`,
+					);
 					this.close();
 				});
 		});
 	}
 
-	async createShare() {
+	async createShare(): Promise<void | string> {
 		if (!this.plugin.activeTransport || !this.plugin.activeWriter) {
 			new Notice("Not connected to server.");
 			console.debug("[OPV] No active transport found.");
@@ -257,14 +292,11 @@ export class ShareModal extends Modal {
 			);
 			console.debug(`joined channel ${newShare.id} after sharing`);
 			await this.plugin.syncHandler.startSync(file);
-			await navigator.clipboard.writeText(newShare.id);
-			new Notice(
-				`Shared ${file.name}. The ShareID has been copied to your clipboard.`,
-			);
+			return newShare.id;
 		}
 	}
 
-	async createSyncGroup(id: string): Promise<void | opError> {
+	async createSyncGroup(id: string): Promise<void | string | opError> {
 		const allFiles = this.app.vault.getFiles();
 		const matches: TFile[] = [];
 		const group: SyncGroup = {
@@ -359,8 +391,7 @@ export class ShareModal extends Modal {
 			this.plugin.settings.syncGroups.push(group);
 			await this.plugin.saveSettings();
 		}
-		await navigator.clipboard.writeText(id);
-		new Notice(`Shared ${id}. The group ID has been copied to your clipboard.`);
+		return id;
 	}
 
 	onClose() {
@@ -375,9 +406,15 @@ export class DownloadModal extends Modal {
 	pin: string = "";
 	mode: "file" | "group" = "file";
 
-	constructor(app: App, plugin: OpVaultPlugin) {
+	constructor(
+		app: App,
+		plugin: OpVaultPlugin,
+		defaultId?: string,
+		defaultPin?: string,
+	) {
 		super(app);
 		this.plugin = plugin;
+		this.shareId = defaultId;
 	}
 
 	onOpen() {
@@ -426,6 +463,7 @@ export class DownloadModal extends Modal {
 					text
 						// eslint-disable-next-line obsidianmd/ui/sentence-case
 						.setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
+						.setValue(this.shareId ? this.shareId : "")
 						.onChange((value) => {
 							this.shareId = value;
 						}),

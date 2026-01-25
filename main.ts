@@ -289,6 +289,13 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			},
 		});
 
+		this.registerObsidianProtocolHandler("opv", async (params) => {
+			console.debug("[OPV] Handling protocol action:", params);
+			if (params.id) {
+				new DownloadModal(this.app, this, params.id).open();
+			}
+		})
+
 		await this.tryConnect();
 	}
 

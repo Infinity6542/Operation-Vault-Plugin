@@ -157,14 +157,16 @@ export class ShareModal extends Modal {
 					};
 					const debounceUpdate = debounce(saveAndValidate, 500);
 
-					text.setPlaceholder("/path/to/file.md");
-					text
-						.setValue(this.activeFile ? this.activeFile.path : "")
+					const value = this.activeFile ? this.activeFile.path : "";
+					this.item = value;
+
+					text.setPlaceholder("/path/to/file.md")
+						.setValue(value)
 						.onChange(async (value) => {
 							debounceUpdate(value);
 						});
 
-					validate(this.item);
+					validate(value);
 
 					new FileSelector(this.app, text.inputEl);
 				});

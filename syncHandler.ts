@@ -27,10 +27,8 @@ import {
 	sendSecureMessage,
 	sendRawJSON,
 	leaveChannel,
-	download,
-	getLatestSnapshot,
-	upload,
-} from "./transport";
+} from "./networking";
+import { upload, download, getLatestSnapshot } from "./comm";
 import {
 	arrayBufferToBase64,
 	base64ToArrayBuffer,

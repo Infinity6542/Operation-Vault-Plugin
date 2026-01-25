@@ -11,12 +11,10 @@ import {
 } from "obsidian";
 import {
 	connect,
-	remove,
-	joinChannel,
 	disconnect,
-	leaveChannel,
 	startHeartbeats,
 } from "./transport";
+import { remove } from "./comm";
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler, cursorPlugin } from "./syncHandler";
 import type {
@@ -27,6 +25,7 @@ import type {
 } from "./types";
 import { FolderSelector, ShareModal, DownloadModal } from "./components";
 import { HistoryView, VIEW_TYPE_HISTORY } from "./views";
+import { joinChannel, leaveChannel } from "./networking";
 
 export type { SharedItem };
 

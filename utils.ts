@@ -1,6 +1,6 @@
 import { App, TFile, Notice } from "obsidian";
 import { IOpVaultPlugin, Manifest, SharedItem } from "types";
-import { download } from "./transport";
+import { download } from "./comm";
 import { decryptBinary } from "./crypto";
 
 export function getFile(app: App, path: string): TFile | null {

@@ -284,38 +284,7 @@ async function readLoop(
 					const message = JSON.parse(chunk) as TransportPacket;
 
 					if (message.type === "user_list") {
-						try {
-							const users = JSON.parse(message.payload) as Record<
-								string,
-								string
-							>;
-							if (message.channel_id === plugin.settings.channelName) {
-								const prev = new Map(plugin.onlineUsers);
-								plugin.onlineUsers.clear();
-								for (const [id, nickname] of Object.entries(users)) {
-									plugin.onlineUsers.set(id, nickname || prev.get(id) || id);
-								}
-								const e = Array.from(plugin.onlineUsers.values());
-								plugin.updatePresence(e.length);
-								console.debug("[OPV] Current users in channel:", users);
-								if (noticeDebounce) {
-									clearTimeout(noticeDebounce);
-								}
-								noticeDebounce = setTimeout(() => {
-									new Notice(`Currently online: ${e.length}`);
-									noticeDebounce = null;
-								}, 500);
-							} else {
-								if (!plugin.channelUsers.has(message.channel_id)) {
-									plugin.channelUsers.delete(message.channel_id);
-								}
-								plugin.channelUsers.set(message.channel_id, new Set());
-								const set = plugin.channelUsers.get(message.channel_id)!;
-								Object.keys(users).forEach((id) => set.add(id));
-							}
-						} catch (e) {
-							console.error("[OPV] Error parsing user list", e);
-						}
+						userList(plugin, message);
 						boundary = buffer.indexOf("\n");
 						continue;
 					}
@@ -332,6 +301,38 @@ async function readLoop(
 			"[OPV] Error reading from stream. It's probably closed, but just in case it isn't:",
 			e,
 		);
+	}
+}
+
+function userList(plugin: IOpVaultPlugin, message: TransportPacket) {
+	try {
+		const users = JSON.parse(message.payload) as Record<string, string>;
+		if (message.channel_id === plugin.settings.channelName) {
+			const prev = new Map(plugin.onlineUsers);
+			plugin.onlineUsers.clear();
+			for (const [id, nickname] of Object.entries(users)) {
+				plugin.onlineUsers.set(id, nickname || prev.get(id) || id);
+			}
+			const e = Array.from(plugin.onlineUsers.values());
+			plugin.updatePresence(e.length);
+			console.debug("[OPV] Current users in channel:", users);
+			if (noticeDebounce) {
+				clearTimeout(noticeDebounce);
+			}
+			noticeDebounce = setTimeout(() => {
+				new Notice(`Currently online: ${e.length}`);
+				noticeDebounce = null;
+			}, 500);
+		} else {
+			if (!plugin.channelUsers.has(message.channel_id)) {
+				plugin.channelUsers.delete(message.channel_id);
+			}
+			plugin.channelUsers.set(message.channel_id, new Set());
+			const set = plugin.channelUsers.get(message.channel_id)!;
+			Object.keys(users).forEach((id) => set.add(id));
+		}
+	} catch (e) {
+		console.error("[OPV] Error parsing user list", e);
 	}
 }
 
@@ -377,20 +378,79 @@ async function handleIn(
 		return;
 	}
 
-	// console.debug(`[OPV] Received something: ${decrypted.type}`);
-
 	switch (decrypted.type) {
+		// decrypted
 		case "file_start":
-			if (!decrypted.fileId) {
-				console.error("[OPV] Empty decrypted content", decrypted);
-				return;
-			}
-			// Ignore missing fileId for now
+		case "file_chunk": {
+			handleFileIn(decrypted);
+			break;
+		}
+		// decrypted, app
+		case "update": {
+			await update(decrypted, app);
+			break;
+		}
+		// plugin, decrypted
+		case "group_info": {
+			await groupInfo(plugin, decrypted);
+			break;
+		}
+		// plugin, decrypted, message
+		case "awareness": {
+			await awareness(plugin, decrypted, message);
+			break;
+		}
+		case "manifest_update": {
+			manifestUpdate(plugin, decrypted, message);
+			break;
+		}
+		case "sync_vector":
+		case "sync_snapshot":
+		case "sync_update": {
+			await sync(plugin, decrypted, message);
+			break;
+		}
+		// plugin, decrypted, message, writer
+		case "download_request": {
+			await downloadRequest(plugin, decrypted, message, writer);
+			break;
+		}
+		// plugin, decrypted, message, key
+		case "file_end": {
+			await fileEnd(plugin, decrypted, message, key);
+			break;
+		}
+		case "diffs": {
+			await diffs(plugin, decrypted, writer, key);
+			break;
+		}
+		case "changes": {
+			await changes(plugin, decrypted, writer, key);
+			break;
+		}
+		// plugin, decrypted, message, writer, key
+		case "group_get": {
+			await groupGet(plugin, decrypted, message, writer, key);
+			break;
+		}
+		default:
+			console.error("[OPV] Unknown message type:", decrypted.type);
+	}
+}
+
+function handleFileIn(decrypted: InnerMessage) {
+	if (!decrypted.fileId) {
+		console.error("[OPV] Empty decrypted content", decrypted);
+		return;
+	}
+	switch (decrypted.type) {
+		case "file_start": {
 			incomingFiles.set(decrypted.fileId, []);
 			console.debug(
 				`Incoming file: ${decrypted.filename} (ID: ${decrypted.fileId})`,
 			);
 			break;
+		}
 		case "file_chunk": {
 			if (
 				!decrypted.fileId ||
@@ -406,341 +466,368 @@ async function handleIn(
 			console.debug(
 				`[OPV] Received chunk ${decrypted.chunkIndex} for file ID: ${decrypted.fileId}`,
 			);
-			break;
 		}
-		case "file_end": {
-			if (!decrypted.fileId) {
-				console.error("[OPV] Empty decrypted content", decrypted);
-				return;
-			}
-			if (!decrypted.filename || !incomingFiles.has(decrypted.fileId)) {
-				console.debug("[OPV] Unknown inner message type:", decrypted);
-				break;
-			}
-			const chunks = incomingFiles.get(decrypted.fileId);
+	}
+}
 
-			if (!chunks) {
-				break;
-			}
+async function fileEnd(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	message: TransportPacket,
+	key: string,
+) {
+	const app = plugin.app;
+	if (!decrypted.fileId) {
+		console.error("[OPV] Empty decrypted content", decrypted);
+		return;
+	}
+	if (!decrypted.filename || !incomingFiles.has(decrypted.fileId)) {
+		console.debug("[OPV] Unknown inner message type:", decrypted);
+		return;
+	}
+	const chunks = incomingFiles.get(decrypted.fileId);
 
-			const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-			const file = new Uint8Array(totalLength);
-			let offset = 0;
-			for (const chunk of chunks) {
-				file.set(chunk, offset);
-				offset += chunk.length;
-			}
+	if (!chunks) {
+		return;
+	}
 
-			const base64String = arrayBufferToBase64(file.buffer);
+	const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+	const file = new Uint8Array(totalLength);
+	let offset = 0;
+	for (const chunk of chunks) {
+		file.set(chunk, offset);
+		offset += chunk.length;
+	}
 
-			const path = await receiveFile(
-				app,
-				decrypted.filename || "unnamed",
-				base64String,
-				plugin.settings.inboxPath,
+	const base64String = arrayBufferToBase64(file.buffer);
+
+	const path = await receiveFile(
+		app,
+		decrypted.filename || "unnamed",
+		base64String,
+		plugin.settings.inboxPath,
+	);
+	incomingFiles.delete(decrypted.fileId);
+	console.debug(
+		`[OPV] Received file: ${decrypted.fileId} at path: ${path as string} at path: ${path as string}`,
+	);
+
+	if (
+		path &&
+		!plugin.settings.sharedItems.some((i) => i.id === message.channel_id)
+	) {
+		const pin = plugin.activeDownloads.get(message.channel_id) || "";
+
+		const item: SharedItem = {
+			id: message.channel_id,
+			path: path,
+			pin: pin || "",
+			key: key,
+			createdAt: Date.now(),
+			shares: 0,
+		};
+
+		plugin.settings.sharedItems.push(item);
+		await plugin.saveSettings();
+		console.debug(
+			`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`,
+		);
+		console.debug(
+			`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`,
+		);
+
+		plugin.activeDownloads.delete(message.channel_id);
+
+		const tFile = app.vault.getAbstractFileByPath(path);
+		if (tFile instanceof TFile) {
+			await plugin.syncHandler.startSync(tFile);
+		}
+	} else if (path) {
+		console.debug(
+			`[OPV] SharedItem already exists for channel: ${message.channel_id}`,
+		);
+	} else {
+		console.warn(`[OPV] Failed to save file, path is: ${path as string}`);
+	}
+}
+
+async function downloadRequest(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	message: TransportPacket,
+	writer: WritableStreamDefaultWriter<Uint8Array>,
+) {
+	console.debug(`[OPV] Download request for: ${decrypted.shareId}`);
+
+	const app = plugin.app;
+	const users = Array.from(
+		plugin.channelUsers.get(message.channel_id) || [],
+	).sort();
+	let index = 0;
+	if (users[0] === message.sender_id) {
+		index = 1;
+	}
+	if (users.length <= 1 || users[index] !== plugin.settings.senderId) {
+		console.debug(
+			`[OPV] Ignoring download request due to not being the leader or the request was made in unusual circumstances.`,
+		);
+		return;
+	}
+
+	const shareItem = plugin.settings.sharedItems.find(
+		(i: SharedItem) => i.id === decrypted.shareId,
+	);
+
+	if (!shareItem) {
+		console.error(`[OPV] No shared item found for ID: ${decrypted.shareId}`);
+		return;
+	}
+
+	const expectedPin = shareItem.pin || "";
+	const incomingPin = decrypted.pin || "";
+
+	if (expectedPin !== incomingPin) {
+		console.error(
+			`[OPV] Invalid PIN for download request of share ID: ${decrypted.shareId}`,
+		);
+		return;
+	}
+
+	const fileToSend = app.vault.getAbstractFileByPath(shareItem.path);
+	if (fileToSend instanceof TFile) {
+		new Notice(`Sending shared file: ${fileToSend.basename}`);
+
+		await sendFileChunked(
+			writer,
+			shareItem.id,
+			fileToSend,
+			app,
+			plugin,
+			shareItem.pin || "",
+		);
+		shareItem.shares++;
+		void plugin.saveSettings();
+	}
+}
+
+async function diffs(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	writer: WritableStreamDefaultWriter<Uint8Array>,
+	key: string,
+) {
+	const app = plugin.app;
+	if (!decrypted.content) {
+		console.error("[OPV] Empty decrypted content", decrypted);
+		return;
+	}
+	console.debug(`[OPV] Sync diffs for file: ${decrypted.fileId}`);
+
+	let remoteFiles: ManifestItem[] = [];
+	try {
+		remoteFiles = JSON.parse(decrypted.content) as ManifestItem[];
+	} catch (e) {
+		console.error("[OPV] Error parsing sync diffs payload", e);
+		return;
+	}
+
+	const filesToRequest: string[] = [];
+	for (const remote of remoteFiles) {
+		const local = app.vault.getAbstractFileByPath(remote.path);
+		if (!local || (local instanceof TFile && local.stat.mtime < remote.mtime)) {
+			filesToRequest.push(remote.path);
+		}
+	}
+
+	if (filesToRequest.length > 0) {
+		const req: SyncMessage = {
+			type: "changes",
+			path: "request_batch",
+			payload: JSON.stringify(filesToRequest),
+		};
+		await sendSecureMessage(
+			writer,
+			plugin.settings.channelName,
+			plugin.settings.senderId,
+			req,
+			key,
+		);
+	}
+}
+
+async function changes(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	writer: WritableStreamDefaultWriter<Uint8Array>,
+	key: string,
+) {
+	const app = plugin.app;
+	if (!decrypted.content) {
+		console.error("[OPV] Empty decrypted content", decrypted);
+		return;
+	}
+	console.debug(`[OPV] Sync changes for file: ${decrypted.fileId}`);
+
+	let requestedIds: string[] = [];
+	try {
+		requestedIds = JSON.parse(decrypted.content) as string[];
+	} catch (e) {
+		console.error("[OPV] Error parsing sync changes payload", e);
+		return;
+	}
+
+	for (const path of requestedIds) {
+		const file = app.vault.getAbstractFileByPath(path);
+
+		if (file instanceof TFile) {
+			const content = await app.vault.readBinary(file);
+			const updateMessage: SyncMessage = {
+				type: "update",
+				path: path,
+				payload: arrayBufferToBase64(content),
+			};
+			await sendSecureMessage(
+				writer,
+				plugin.settings.channelName,
+				plugin.settings.senderId,
+				updateMessage,
+				key,
 			);
-			incomingFiles.delete(decrypted.fileId);
-			console.debug(
-				`[OPV] Received file: ${decrypted.fileId} at path: ${path as string} at path: ${path as string}`,
+		}
+	}
+}
+
+async function update(decrypted: InnerMessage, app: App) {
+	if (!decrypted.content) {
+		console.error("[OPV] Empty decrypted content", decrypted);
+		return;
+	}
+	console.debug(`[OPV] Sync update for file: ${decrypted.path}`);
+
+	const path = decrypted.path;
+	if (!path) {
+		console.error("[OPV] update message missing path");
+		return;
+	}
+	await receiveFile(app, path, decrypted.content, "", true);
+}
+
+async function sync(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	message: TransportPacket,
+) {
+	if (decrypted.syncPayload) {
+		await plugin.syncHandler.handleSyncMessage(
+			decrypted.type,
+			message.channel_id,
+			decrypted.syncPayload,
+		);
+	}
+	return;
+}
+
+async function groupGet(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	message: TransportPacket,
+	writer: WritableStreamDefaultWriter<Uint8Array>,
+	key: string,
+) {
+	if (decrypted.content) {
+		const group = plugin.settings.syncGroups.find(
+			(g) => g.id === decrypted.content,
+		);
+		if (!group) return;
+		const response: InnerMessage = {
+			type: "group_info",
+			content: JSON.stringify(group),
+		};
+		await sendSecureMessage(
+			writer,
+			message.channel_id,
+			plugin.settings.senderId,
+			response,
+			key,
+		);
+	} else {
+		console.error("[OPV] group_get message missing content");
+	}
+}
+
+async function groupInfo(plugin: IOpVaultPlugin, decrypted: InnerMessage) {
+	if (decrypted.content) {
+		let group: SyncGroup;
+		try {
+			group = JSON.parse(decrypted.content) as SyncGroup;
+		} catch (e) {
+			console.error("[OPV] Error parsing group info payload", e);
+			new Notice("Error parsing group info payload. Check console.");
+			return;
+		}
+
+		const existingGroup = plugin.settings.syncGroups.find(
+			(g) => g.id === group.id,
+		);
+		if (!existingGroup) {
+			plugin.settings.syncGroups.push(group);
+			await plugin.saveSettings();
+			plugin.activeDownloads.delete(group.id);
+			console.debug(`[OPV] Added sync group: ${group.id}`);
+		}
+
+		for (const file of group.files) {
+			plugin.activeDownloads.set(file.id, file.pin || "");
+			await requestFile(file.id, plugin, file.pin || "");
+		}
+	} else {
+		console.error("[OPV] group_info message missing content");
+	}
+}
+
+async function awareness(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	message: TransportPacket,
+) {
+	if (decrypted.path && decrypted.awarenessPayload) {
+		let sharedItem = plugin.settings.sharedItems.find(
+			(i) => i.id === message.channel_id,
+		);
+		if (!sharedItem) {
+			console.error(
+				"[OPV] Awareness message for unknown shared item:",
+				message.channel_id,
 			);
-
-			if (
-				path &&
-				!plugin.settings.sharedItems.some((i) => i.id === message.channel_id)
-			) {
-				const pin = plugin.activeDownloads.get(message.channel_id) || "";
-
-				const item: SharedItem = {
-					id: message.channel_id,
-					path: path,
-					pin: pin || "",
-					key: key,
-					createdAt: Date.now(),
-					shares: 0,
-				};
-
-				plugin.settings.sharedItems.push(item);
-				await plugin.saveSettings();
-				console.debug(
-					`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`,
-				);
-				console.debug(
-					`[OPV] Added SharedItem for downloaded file: ${path} (ID: ${message.channel_id})`,
-				);
-
-				plugin.activeDownloads.delete(message.channel_id);
-
-				const tFile = app.vault.getAbstractFileByPath(path);
-				if (tFile instanceof TFile) {
-					await plugin.syncHandler.startSync(tFile);
-				}
-			} else if (path) {
-				console.debug(
-					`[OPV] SharedItem already exists for channel: ${message.channel_id}`,
-				);
-			} else {
-				console.warn(`[OPV] Failed to save file, path is: ${path as string}`);
-			}
-			break;
+			return;
 		}
-		case "download_request": {
-			console.debug(`[OPV] Download request for: ${decrypted.shareId}`);
-
-			const users = Array.from(
-				plugin.channelUsers.get(message.channel_id) || [],
-			).sort();
-			let index = 0;
-			if (users[0] === message.sender_id) {
-				index = 1;
-			}
-			if (users.length <= 1 || users[index] !== plugin.settings.senderId) {
-				console.debug(
-					`[OPV] Ignoring download request due to not being the leader or the request was made in unusual circumstances.`,
-				);
-				break;
-			}
-
-			const shareItem = plugin.settings.sharedItems.find(
-				(i: SharedItem) => i.id === decrypted.shareId,
-			);
-
-			if (!shareItem) {
-				console.error(
-					`[OPV] No shared item found for ID: ${decrypted.shareId}`,
-				);
-				break;
-			}
-
-			const expectedPin = shareItem.pin || "";
-			const incomingPin = decrypted.pin || "";
-
-			if (expectedPin !== incomingPin) {
-				console.error(
-					`[OPV] Invalid PIN for download request of share ID: ${decrypted.shareId}`,
-				);
-				break;
-			}
-
-			const fileToSend = app.vault.getAbstractFileByPath(shareItem.path);
-			if (fileToSend instanceof TFile) {
-				new Notice(`Sending shared file: ${fileToSend.basename}`);
-
-				// const transferKey = plugin.settings.encryptionKey;
-				await sendFileChunked(
-					writer,
-					shareItem.id,
-					fileToSend,
-					app,
-					plugin,
-					shareItem.pin || "",
-				);
-				shareItem.shares++;
-				void plugin.saveSettings();
-			}
-			break;
-		}
-		case "diffs": {
-			if (!decrypted.content) {
-				console.error("[OPV] Empty decrypted content", decrypted);
-				return;
-			}
-			console.debug(`[OPV] Sync diffs for file: ${decrypted.fileId}`);
-
-			let remoteFiles: ManifestItem[] = [];
-			try {
-				remoteFiles = JSON.parse(decrypted.content) as ManifestItem[];
-			} catch (e) {
-				console.error("[OPV] Error parsing sync diffs payload", e);
-				break;
-			}
-
-			const filesToRequest: string[] = [];
-			for (const remote of remoteFiles) {
-				const local = app.vault.getAbstractFileByPath(remote.path);
-				if (
-					!local ||
-					(local instanceof TFile && local.stat.mtime < remote.mtime)
-				) {
-					filesToRequest.push(remote.path);
-				}
-			}
-
-			if (filesToRequest.length > 0) {
-				const req: SyncMessage = {
-					type: "changes",
-					path: "request_batch",
-					payload: JSON.stringify(filesToRequest),
-				};
-				await sendSecureMessage(
-					writer,
-					plugin.settings.channelName,
-					plugin.settings.senderId,
-					req,
-					key,
-				);
-			}
-			break;
-		}
-		case "changes": {
-			if (!decrypted.content) {
-				console.error("[OPV] Empty decrypted content", decrypted);
-				return;
-			}
-			console.debug(`[OPV] Sync changes for file: ${decrypted.fileId}`);
-
-			let requestedIds: string[] = [];
-			try {
-				requestedIds = JSON.parse(decrypted.content) as string[];
-			} catch (e) {
-				console.error("[OPV] Error parsing sync changes payload", e);
-				break;
-			}
-
-			for (const path of requestedIds) {
-				const file = app.vault.getAbstractFileByPath(path);
-
-				if (file instanceof TFile) {
-					const content = await app.vault.readBinary(file);
-					const updateMessage: SyncMessage = {
-						type: "update",
-						path: path,
-						payload: arrayBufferToBase64(content),
-					};
-					await sendSecureMessage(
-						writer,
-						plugin.settings.channelName,
-						plugin.settings.senderId,
-						updateMessage,
-						key,
-					);
-				}
-			}
-			break;
-		}
-		case "update": {
-			if (!decrypted.content) {
-				console.error("[OPV] Empty decrypted content", decrypted);
-				return;
-			}
-			console.debug(`[OPV] Sync update for file: ${decrypted.path}`);
-
-			const path = decrypted.path;
-			if (!path) {
-				console.error("[OPV] update message missing path");
-				break;
-			}
-			await receiveFile(app, path, decrypted.content, "", true);
-			break;
-		}
-		case "sync_vector":
-		case "sync_snapshot":
-		case "sync_update": {
-			if (decrypted.syncPayload) {
-				await plugin.syncHandler.handleSyncMessage(
-					decrypted.type,
-					message.channel_id,
-					decrypted.syncPayload,
-				);
-			}
-			break;
-		}
-		case "group_get": {
-			if (decrypted.content) {
-				const group = plugin.settings.syncGroups.find(
-					(g) => g.id === decrypted.content,
-				);
-				if (!group) break;
-				const response: InnerMessage = {
-					type: "group_info",
-					content: JSON.stringify(group),
-				};
-				await sendSecureMessage(
-					writer,
-					message.channel_id,
-					plugin.settings.senderId,
-					response,
-					key,
-				);
-			} else {
-				console.error("[OPV] group_get message missing content");
-			}
-			break;
-		}
-		case "group_info": {
-			if (decrypted.content) {
-				let group: SyncGroup;
-				try {
-					group = JSON.parse(decrypted.content) as SyncGroup;
-				} catch (e) {
-					console.error("[OPV] Error parsing group info payload", e);
-					new Notice("Error parsing group info payload. Check console.");
-					break;
-				}
-
-				const existingGroup = plugin.settings.syncGroups.find(
-					(g) => g.id === group.id,
-				);
-				if (!existingGroup) {
-					plugin.settings.syncGroups.push(group);
-					await plugin.saveSettings();
-					plugin.activeDownloads.delete(group.id);
-					console.debug(`[OPV] Added sync group: ${group.id}`);
-				}
-
-				for (const file of group.files) {
-					plugin.activeDownloads.set(file.id, file.pin || "");
-					await requestFile(file.id, plugin, file.pin || "");
-				}
-			} else {
-				console.error("[OPV] group_info message missing content");
-			}
-			break;
-		}
-		case "awareness": {
-			if (decrypted.path && decrypted.awarenessPayload) {
-				let sharedItem = plugin.settings.sharedItems.find(
-					(i) => i.id === message.channel_id,
-				);
-				if (!sharedItem) {
-					console.error(
-						"[OPV] Awareness message for unknown shared item:",
-						message.channel_id,
-					);
-					break;
-				}
-				await plugin.syncHandler.handleAwarenessUpdate(
-					sharedItem.path,
-					decrypted.awarenessPayload,
-				);
-			} else {
-				console.error("[OPV] Invalid awareness message:", decrypted);
-			}
-			break;
-		}
-		case "manifest_update": {
-			try {
-				const manifest = JSON.parse(decrypted.content as string) as Manifest;
-				plugin.manifests.set(message.channel_id, manifest);
-				console.debug(
-					`[OPV] Updated manifest for shared item: ${message.channel_id}`,
-				);
-				plugin.app.workspace.trigger(
-					"opv:snapshot-created",
-					message.channel_id
-				);
-			} catch (e) {
-				console.error("[OPV] Error parsing manifest update payload", e);
-			}
-			break;
-		}
-		default:
-			console.error("[OPV] Unknown message type:", decrypted.type);
+		await plugin.syncHandler.handleAwarenessUpdate(
+			sharedItem.path,
+			decrypted.awarenessPayload,
+		);
+	} else {
+		console.error("[OPV] Invalid awareness message:", decrypted);
+	}
+}
+function manifestUpdate(
+	plugin: IOpVaultPlugin,
+	decrypted: InnerMessage,
+	message: TransportPacket,
+) {
+	try {
+		const manifest = JSON.parse(decrypted.content as string) as Manifest;
+		plugin.manifests.set(message.channel_id, manifest);
+		console.debug(
+			`[OPV] Updated manifest for shared item: ${message.channel_id}`,
+		);
+		plugin.app.workspace.trigger("opv:snapshot-created", message.channel_id);
+	} catch (e) {
+		console.error("[OPV] Error parsing manifest update payload", e);
 	}
 }
 
 export async function upload(
 	file: TFile,
-	app: App,
 	plugin: IOpVaultPlugin,
 	shareId: string,
 	pin?: string,
@@ -748,6 +835,7 @@ export async function upload(
 	snapshot?: Snapshot,
 	yjsState?: Uint8Array,
 ) {
+	const app = plugin.app;
 	const transport = plugin.activeTransport;
 	const fileData = await app.vault.readBinary(file);
 

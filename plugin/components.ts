@@ -280,7 +280,7 @@ export class ShareModal extends Modal {
 				shares: 0,
 			};
 			if (this.upload) {
-				await upload(file, this.app, this.plugin, newShare.id, newShare.key);
+				await upload(file, this.plugin, newShare.id, newShare.key);
 			}
 			this.plugin.settings.sharedItems.push(newShare);
 			await this.plugin.saveSettings();

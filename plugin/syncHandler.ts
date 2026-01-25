@@ -50,7 +50,7 @@ import {
 	Snapshot,
 } from "./types";
 import { receiveFile } from "./fileHandler";
-import { getFile, getDate } from "./utils";
+import { getFile, getDate, getManifest } from "./utils";
 
 const openDocs = new Map<string, Y.Doc>();
 const openAwareness = new Map<string, Awareness>();
@@ -105,39 +105,13 @@ export class SyncHandler {
 		}
 
 		if (checkState) {
-			const buffer = await download(
-				this.plugin,
-				sharedItem.id,
-				"manifest.json",
-			);
-			if (!buffer) {
-				console.error("[OPV] Failed to download manifest");
-				new Notice("Failed to download manifest. Check console for details.");
-				return;
-			}
-
+			const manifest = await getManifest(this.plugin, sharedItem);
 			const key =
 				sharedItem.pin && sharedItem.pin.length > 0 ? sharedItem.pin : null;
-			let manifestBuffer: Uint8Array | null = null;
-			if (key) {
-				manifestBuffer = await decryptBinary(buffer, key);
-			} else {
-				manifestBuffer = buffer;
-			}
-
-			if (!manifestBuffer) {
-				console.error("[OPV] Failed to decrypt manifest");
-				new Notice("Failed to decrypt manifest.");
+			if (!manifest) {
+				console.error(`[OPV] Failed to get manifest for ${sharedItem.id}`);
 				return;
 			}
-
-			const manifestJSON = new TextDecoder().decode(manifestBuffer);
-			if (!manifestJSON) {
-				console.warn(`[OPV] Empty manifest JSON for ${sharedItem.id}`);
-				return;
-			}
-			const manifest = JSON.parse(manifestJSON) as Manifest;
-			console.debug(`[OPV] Received manifest for ${sharedItem.id}:`, manifest);
 			const latest =
 				manifest.snapshots[manifest.snapshots.length - 1].iteration;
 			const localManifest = this.plugin.manifests.get(sharedItem.id);
@@ -300,15 +274,7 @@ export class SyncHandler {
 			ctime: Date.now(),
 		};
 		const pin = shareItem.pin && shareItem.pin.length > 0 ? shareItem.pin : "";
-		await upload(
-			file,
-			this.app,
-			this.plugin,
-			shareItem.id,
-			pin,
-			manifest,
-			snapshot,
-		);
+		await upload(file, this.plugin, shareItem.id, pin, manifest, snapshot);
 
 		this.app.workspace.trigger("opv:snapshot-created", shareItem.id);
 		const msg: InnerMessage = {

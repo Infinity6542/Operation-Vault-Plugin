@@ -149,7 +149,7 @@ export class SyncHandler {
 			if (origin === "remote" || origin === "local-load") return;
 			void this.sendSyncMessage(file.path, "sync_update", update);
 		});
-		return { doc, awareness }
+		return { doc, awareness };
 	}
 
 	async startSync(
@@ -187,7 +187,7 @@ export class SyncHandler {
 			await this.ensureManifestLoaded(sharedItem);
 		}
 
-		let {doc} = await this.initYjs(file);
+		let { doc } = await this.initYjs(file);
 
 		const stateVector = Y.encodeStateVector(doc);
 		await this.sendSyncMessage(file.path, "sync_vector", stateVector);

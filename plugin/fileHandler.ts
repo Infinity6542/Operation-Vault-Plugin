@@ -1,5 +1,5 @@
 import { App, TFile, Notice } from "obsidian";
-import { sendSecureMessage } from "./transport";
+import { sendSecureMessage } from "./networking";
 import { getHash, arrayBufferToBase64 } from "./crypto";
 import { IOpVaultPlugin } from "./types";
 

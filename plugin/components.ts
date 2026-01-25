@@ -19,11 +19,10 @@ import {
 } from "./types";
 import OpVaultPlugin, { generateUUID } from "./main";
 import {
-	joinChannel,
-	upload,
-	sendSecureMessage,
 	requestFile,
-} from "./transport";
+} from "./handlers/fileTransfer";
+import { upload } from "./comm";
+import { sendSecureMessage, joinChannel } from "./networking";
 
 //TODO: Remake the UI, particularly tracking shares
 // Differentiate between shares and receives

@@ -151,7 +151,7 @@ export async function encryptBinary(
 export async function decryptBinary(
 	data: Uint8Array,
 	keyStr: string,
-): Promise<Uint8Array | null> {
+): Promise<Uint8Array> {
 	try {
 		const salt = data.slice(0, SALT_LEN);
 		const iv = data.slice(SALT_LEN, SALT_LEN + IV_LEN);
@@ -176,7 +176,7 @@ export async function decryptBinary(
 		return new Uint8Array(decrypted);
 	} catch (e) {
 		console.error("[OPV] Binary decryption failed:", e);
-		return null;
+		throw e;
 	}
 }
 

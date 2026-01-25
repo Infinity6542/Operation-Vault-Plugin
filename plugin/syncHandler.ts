@@ -23,11 +23,7 @@ import {
 	MarkdownView,
 	normalizePath,
 } from "obsidian";
-import {
-	sendSecureMessage,
-	sendRawJSON,
-	leaveChannel,
-} from "./networking";
+import { sendSecureMessage, sendRawJSON, leaveChannel } from "./networking";
 import { upload, download, getLatestSnapshot } from "./comm";
 import {
 	arrayBufferToBase64,
@@ -72,65 +68,34 @@ export class SyncHandler {
 		return openDocs.get(path);
 	}
 
-	async startSync(
-		file: TFile,
-		checkState: boolean = false,
-		group?: boolean,
-		reSync: boolean = false,
-	): Promise<SharedItem | void> {
-		if (openDocs.has(file.path)) {
-			if (reSync) {
-				console.debug(`[OPV] Re-syncing document: ${file.path}`);
-				const doc = openDocs.get(file.path);
-				if (doc) {
-					const stateVector = Y.encodeStateVector(doc);
-					await this.sendSyncMessage(file.path, "sync_vector", stateVector);
-				}
-				const awareness = openAwareness.get(file.path);
-				if (awareness && doc) {
-					const update = encodeAwarenessUpdate(awareness, [doc.clientID]);
-					void this.sendSyncMessage(file.path, "awareness", update);
-				}
-			}
+	private async ensureManifestLoaded(sharedItem: SharedItem) {
+		const manifest = await getManifest(this.plugin, sharedItem);
+		const key =
+			sharedItem.pin && sharedItem.pin.length > 0 ? sharedItem.pin : null;
+		if (!manifest) {
+			console.error(`[OPV] Failed to get manifest for ${sharedItem.id}`);
 			return;
 		}
-
-		const sharedItem = this.plugin.settings.sharedItems.find(
-			(i) => i.path === file.path,
-		);
-		if (!sharedItem) {
-			console.error(`[OPV] No shared item found for path: ${file.path}`);
-			return;
+		const latest = manifest.snapshots[manifest.snapshots.length - 1].iteration;
+		const localManifest = this.plugin.manifests.get(sharedItem.id);
+		let localIteration = 0;
+		if (localManifest && localManifest.snapshots.length > 0) {
+			localIteration =
+				localManifest.snapshots[localManifest.snapshots.length - 1].iteration ||
+				0;
 		}
 
-		if (checkState) {
-			const manifest = await getManifest(this.plugin, sharedItem);
-			const key =
-				sharedItem.pin && sharedItem.pin.length > 0 ? sharedItem.pin : null;
-			if (!manifest) {
-				console.error(`[OPV] Failed to get manifest for ${sharedItem.id}`);
-				return;
-			}
-			const latest =
-				manifest.snapshots[manifest.snapshots.length - 1].iteration;
-			const localManifest = this.plugin.manifests.get(sharedItem.id);
-			let localIteration = 0;
-			if (localManifest && localManifest.snapshots.length > 0) {
-				localIteration =
-					localManifest.snapshots[localManifest.snapshots.length - 1]
-						.iteration || 0;
-			}
+		this.plugin.manifests.set(sharedItem.id, manifest);
 
-			this.plugin.manifests.set(sharedItem.id, manifest);
-
-			if (localIteration < latest) {
-				console.debug(
-					`[OPV] Local file is out of date, downloading latest snapshot`,
-				);
-				await getLatestSnapshot(this.plugin, manifest, key, sharedItem.id);
-			}
+		if (localIteration < latest) {
+			console.debug(
+				`[OPV] Local file is out of date, downloading latest snapshot`,
+			);
+			await getLatestSnapshot(this.plugin, manifest, key, sharedItem.id);
 		}
+	}
 
+	private async initYjs(file: TFile) {
 		const doc = new Y.Doc();
 		doc.clientID = this.hashString(this.plugin.settings.senderId);
 		const yText = doc.getText("content");
@@ -184,6 +149,45 @@ export class SyncHandler {
 			if (origin === "remote" || origin === "local-load") return;
 			void this.sendSyncMessage(file.path, "sync_update", update);
 		});
+		return { doc, awareness }
+	}
+
+	async startSync(
+		file: TFile,
+		checkState: boolean = false,
+		group?: boolean,
+		reSync: boolean = false,
+	): Promise<SharedItem | void> {
+		if (openDocs.has(file.path)) {
+			if (reSync) {
+				console.debug(`[OPV] Re-syncing document: ${file.path}`);
+				const doc = openDocs.get(file.path);
+				if (doc) {
+					const stateVector = Y.encodeStateVector(doc);
+					await this.sendSyncMessage(file.path, "sync_vector", stateVector);
+				}
+				const awareness = openAwareness.get(file.path);
+				if (awareness && doc) {
+					const update = encodeAwarenessUpdate(awareness, [doc.clientID]);
+					void this.sendSyncMessage(file.path, "awareness", update);
+				}
+			}
+			return;
+		}
+
+		const sharedItem = this.plugin.settings.sharedItems.find(
+			(i) => i.path === file.path,
+		);
+		if (!sharedItem) {
+			console.error(`[OPV] No shared item found for path: ${file.path}`);
+			return;
+		}
+
+		if (checkState) {
+			await this.ensureManifestLoaded(sharedItem);
+		}
+
+		let {doc} = await this.initYjs(file);
 
 		const stateVector = Y.encodeStateVector(doc);
 		await this.sendSyncMessage(file.path, "sync_vector", stateVector);

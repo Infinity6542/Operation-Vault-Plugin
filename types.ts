@@ -44,7 +44,8 @@ export interface InnerMessage {
 		| "group_get"
 		| "group_info"
 		| "awareness"
-		| "manifest_update";
+		| "manifest_update"
+		| "user_list";
 	content?: string;
 	filename?: string;
 	fileId?: string;

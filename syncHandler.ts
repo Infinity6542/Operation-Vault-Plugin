@@ -48,7 +48,8 @@ import {
 	Snapshot,
 } from "./types";
 import { receiveFile } from "./fileHandler";
-import { getFile, getDate, getManifest } from "./utils";
+import { getFile, getDate } from "./utils";
+import { getManifest } from "./handlers/state";
 
 const openDocs = new Map<string, Y.Doc>();
 const openAwareness = new Map<string, Awareness>();

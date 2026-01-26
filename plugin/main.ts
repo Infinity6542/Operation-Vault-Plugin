@@ -9,11 +9,7 @@ import {
 	TFile,
 	WorkspaceLeaf,
 } from "obsidian";
-import {
-	connect,
-	disconnect,
-	startHeartbeats,
-} from "./transport";
+import { connect, disconnect, startHeartbeats } from "./transport";
 import { remove } from "./comm";
 import { sendFileChunked } from "./fileHandler";
 import { SyncHandler, cursorPlugin } from "./syncHandler";
@@ -167,6 +163,14 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 					item.path = file.path;
 					await this.saveSettings();
 				}
+				const groups = this.settings.syncGroups.filter((g) =>
+					g.files.some((f) => f.id === sharedItem[0].id),
+				);
+				if (groups) {
+					for (let i = 0; i < groups.length; i++) {
+						await this.syncHandler.updateMap(groups[i]);
+					}
+				}
 				console.debug(
 					`[OPV] File moved or renamed: ${oldPath} -> ${file.path}`,
 				);
@@ -201,6 +205,8 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 						group.files = group.files.filter((f) => f.path !== file.path);
 						if (group.files.length === 0) {
 							await this.syncHandler.removeSyncGroup(group);
+						} else {
+							await this.syncHandler.updateMap(groups[i]);
 						}
 					}
 					await this.saveSettings();
@@ -275,6 +281,21 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 						this.settings.nickname,
 					);
 				}
+
+				const groups = this.settings.syncGroups.filter((g) =>
+					g.files.some(
+						(f) =>
+							f.id ===
+							this.settings.sharedItems.filter(
+								(item) => item.path === file.path,
+							)[0].id,
+					),
+				);
+				if (groups) {
+					for (let i = 0; i < groups.length; i++) {
+						await this.syncHandler.updateMap(groups[i]);
+					}
+				}
 			}),
 		);
 
@@ -293,7 +314,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 			if (params.id) {
 				new DownloadModal(this.app, this, params.id).open();
 			}
-		})
+		});
 
 		await this.tryConnect();
 	}

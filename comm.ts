@@ -15,6 +15,7 @@ import type {
 } from "./types";
 import { getDate } from "./utils";
 
+//TODO: Refactor this to upload *anything*
 export async function upload(
 	file: TFile,
 	plugin: IOpVaultPlugin,

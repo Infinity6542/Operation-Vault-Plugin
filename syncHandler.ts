@@ -29,6 +29,7 @@ import {
 	arrayBufferToBase64,
 	base64ToArrayBuffer,
 	decryptBinary,
+	encryptBinary,
 } from "./crypto";
 import {
 	IOpVaultPlugin,
@@ -861,6 +862,51 @@ export class SyncHandler {
 		);
 		await this.plugin.saveSettings();
 		new Notice(`Removed sync group ${group.id}.`);
+	}
+
+	async updateMap(group: SyncGroup) {
+		if (!this.plugin.activeWriter || !this.plugin.activeTransport) return;
+
+		const map: Record<string, string> = {};
+		for (const file of group.files) {
+			map[file.id] = file.path;
+		}
+
+		const encoder = new TextEncoder();
+		const mapData = encoder.encode(JSON.stringify(map));
+		const pin = group.pin && group.pin.length > 0 ? group.pin : null;
+
+		try {
+			const stream =
+				await this.plugin.activeTransport.createBidirectionalStream();
+			const writer = stream.writable.getWriter();
+
+			const header =
+				JSON.stringify({
+					type: "upload",
+					channel_id: group.id,
+					payload: "map.json",
+					sender_id: this.plugin.settings.senderId,
+				}) + "\n";
+
+			await writer.write(encoder.encode(header));
+
+			let data: Uint8Array;
+			if (pin) {
+				data = (await encryptBinary(mapData.buffer, pin))!;
+			} else {
+				data = mapData;
+			}
+
+			await writer.write(data);
+			await writer.close();
+			console.debug(`[OPV] Updated sync group map for ${group.id}`);
+		} catch (e) {
+			console.error(
+				`[OPV] Failed to update sync group map for ${group.id}:`,
+				e,
+			);
+		}
 	}
 }
 

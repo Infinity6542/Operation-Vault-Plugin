@@ -8,3 +8,4 @@ plugin/main.js
 server/op-vault-server
 .vscode/*
 docs
+.*/**

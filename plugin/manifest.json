@@ -1,9 +1,9 @@
 {
 	"id": "opvault",
-	"name": "opvault",
+	"name": "Operation Vault",
 	"version": "0.0.1",
-	"minAppVersion": "0.15.0",
-	"description": "Live share your notes peer-to-peer via WebTransport.",
+	"minAppVersion": "1.11.0",
+	"description": "Share and collaborate in realtime with live cursors, selection highlights and more!",
 	"author": "Infinity6542",
 	"authorUrl": "https://github.com/infinity6542",
 	"isDesktopOnly": false

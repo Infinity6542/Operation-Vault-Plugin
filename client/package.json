@@ -24,7 +24,7 @@
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.4.0",
     "wouter": "^3.9.0",
-    "y-codemirror": "^3.0.1",
+    "y-codemirror.next": "^0.3.5",
     "yjs": "^13.6.29"
   },
   "devDependencies": {

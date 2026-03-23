@@ -35,13 +35,13 @@ export default function ReaderDash() {
 		// This will have z-index of 0 with a slightly opaque white look
 		// This is so that the blurred circles with z-index of -1 can be seen
 		<div className="outline-children">
-			<div className="grid gap-2 grid-cols-[1fr_3fr_1fr] grid-rows-[1fr_3fr_1fr] h-screen">
+			<div className="grid gap-2 grid-cols-[minmax(10px,300px)_1fr_minmax(10px,300px)] grid-rows-[minmax(10px,300px)_1fr_minmax(10px,300px)] h-screen">
 				{/* TL */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 				{/* TC */}
 				<div className=""></div>
 				{/* TR */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 				{/* ML */}
 				<div className=""></div>
 				{/* MC */}
@@ -49,11 +49,11 @@ export default function ReaderDash() {
 				{/* MR */}
 				<div className=""></div>
 				{/* BL */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 				{/* BC */}
 				<div className=""></div>
 				{/* BR */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 			</div>
 		</div>
 	);

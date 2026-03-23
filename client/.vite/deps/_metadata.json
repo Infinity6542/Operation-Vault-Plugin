@@ -1,0 +1,52 @@
+{
+  "hash": "eb89c503",
+  "configHash": "51cf136e",
+  "lockfileHash": "34f8901c",
+  "browserHash": "5decf91f",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "8ac30a2f",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "43f7bcbc",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "67ee855a",
+      "needsInterop": true
+    },
+    "wouter": {
+      "src": "../../node_modules/wouter/src/index.js",
+      "file": "wouter.js",
+      "fileHash": "331692c0",
+      "needsInterop": false
+    },
+    "markdown-it": {
+      "src": "../../node_modules/markdown-it/index.mjs",
+      "file": "markdown-it.js",
+      "fileHash": "bdd9b90b",
+      "needsInterop": false
+    },
+    "dompurify": {
+      "src": "../../node_modules/dompurify/dist/purify.es.mjs",
+      "file": "dompurify.js",
+      "fileHash": "f0d329f0",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-VX2H6PUQ": {
+      "file": "chunk-VX2H6PUQ.js"
+    },
+    "chunk-G3PMV62Z": {
+      "file": "chunk-G3PMV62Z.js"
+    }
+  }
+}

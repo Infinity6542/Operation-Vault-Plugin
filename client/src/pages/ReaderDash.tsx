@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+// import { Link } from "wouter";
 
 export default function ReaderDash() {
 	const posts = [
@@ -37,13 +37,13 @@ export default function ReaderDash() {
 		<div className="outline-children">
 			<div className="grid gap-2 grid-cols-[1fr_5fr_1fr] grid-rows-[1fr_5fr_1fr] h-screen">
 				{/* TL */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 				{/* TC */}
 				<div className="flex justify-center content-center">
           <div className="flex"><p>LOGO</p></div>
         </div>
 				{/* TR */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 				{/* ML */}
 				<div className=""></div>
 				{/* MC */}
@@ -51,11 +51,11 @@ export default function ReaderDash() {
 				{/* MR */}
 				<div className=""></div>
 				{/* BL */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 				{/* BC */}
 				<div className=""></div>
 				{/* BR */}
-				<div className="aspect-square"></div>
+				<div className="aspect-square max-w-[300px]"></div>
 			</div>
 		</div>
 	);

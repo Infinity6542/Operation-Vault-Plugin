@@ -320,6 +320,7 @@ func handleStream(stream *webtransport.Stream) {
 			broadcastUserList(msg.ChannelID)
 			return
 		default:
+			// Potentially unsafe
 			logger.Infof("Message of misc type '%s' received for channel %s", msg.Type, msg.ChannelID)
 			broadcast(msg, stream)
 		}

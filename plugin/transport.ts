@@ -20,7 +20,7 @@ export async function connect(
 ): Promise<WebTransport | null> {
 	const senderId = plugin.settings.senderId;
 	const app = plugin.app;
-	const devHash = "P/q1SBmf12VpomwKYAnYsGzfh7dkWyyx7SIvrDXSiSI=";
+	const devHash = "wErvzx2jl4TTiUQ1drAlR5VJMX3qDbqJmnjCScfhbKc=";
 	const options: WebTransportOptions = {
 		serverCertificateHashes: [
 			{

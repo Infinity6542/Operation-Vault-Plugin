@@ -319,10 +319,6 @@ func handleStream(stream *webtransport.Stream) {
 			hub.Unlock()
 			broadcastUserList(msg.ChannelID)
 			return
-		case "download_request":
-			logger.Infof("Download request received in channel %s from %s for file %s", msg.ChannelID, msg.SenderID, msg.Payload)
-			//TODO:
-			// Fetch latest snapshot
 		default:
 			logger.Infof("Message of misc type '%s' received for channel %s", msg.Type, msg.ChannelID)
 			broadcast(msg, stream)

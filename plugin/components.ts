@@ -8,6 +8,8 @@ import {
 	Notice,
 	TFile,
 	Setting,
+    ButtonComponent,
+    // stringifyYaml,
 } from "obsidian";
 import {
 	opError,
@@ -409,7 +411,7 @@ export class DownloadModal extends Modal {
 		app: App,
 		plugin: OpVaultPlugin,
 		defaultId?: string,
-		defaultPin?: string,
+		// defaultPin?: string,
 	) {
 		super(app);
 		this.plugin = plugin;
@@ -538,3 +540,68 @@ export class DownloadModal extends Modal {
 		contentEl.empty();
 	}
 }
+
+export class ConfirmModal extends Modal {
+  private resolve: (value: boolean) => void;
+  private submitted: boolean = false;
+
+  constructor(
+    app: App,
+    private title: string,
+    private message: string,
+    private destructive?: boolean,
+  ) {
+    super(app);
+  }
+
+  static async display(app: App, title: string, message: string, destructive?: boolean): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = new ConfirmModal(app, title, message, destructive);
+      modal.resolve = resolve;
+      modal.open();
+    })
+  }
+
+  onOpen() {
+    const { contentEl, titleEl } = this;
+
+    titleEl.setText(this.title);
+    contentEl.createEl("p", { text: this.message });
+
+    const btnDiv = contentEl.createDiv({ cls: "opv-modal-btns" });
+
+    if (this.destructive) {
+      new ButtonComponent(btnDiv)
+      .setButtonText("Confirm")
+      .setWarning()
+      .onClick(() => {
+          this.submitted = true;
+          this.resolve(true);
+          this.close();
+        });
+    } else {
+      new ButtonComponent(btnDiv)
+      .setButtonText("Confirm")
+      .setCta()
+      .onClick(() => {
+          this.submitted = true;
+          this.resolve(true);
+          this.close();
+        })
+    }
+
+    new ButtonComponent(btnDiv)
+    .setButtonText("Cancel")
+    .onClick(() => {
+        this.close();
+      })
+  }
+
+  onClose() {
+    this.contentEl.empty();
+    if (!this.submitted) {
+      this.resolve(false);
+    }
+  }
+}
+

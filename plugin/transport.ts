@@ -20,15 +20,19 @@ export async function connect(
 ): Promise<WebTransport | null> {
 	const senderId = plugin.settings.senderId;
 	const app = plugin.app;
-	const devHash = "wErvzx2jl4TTiUQ1drAlR5VJMX3qDbqJmnjCScfhbKc=";
-	const options: WebTransportOptions = {
+  let options: WebTransportOptions;
+  if (plugin.settings.devMode) {
+	options = {
 		serverCertificateHashes: [
 			{
 				algorithm: "sha-256",
-				value: conversion(devHash).buffer as ArrayBuffer,
+				value: conversion(plugin.settings.certHash).buffer as ArrayBuffer,
 			},
 		],
 	};
+  } else {
+    options = {};
+  }
 
 	try {
 		const transport = new WebTransport(url, options);

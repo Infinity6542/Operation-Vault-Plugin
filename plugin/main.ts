@@ -19,7 +19,7 @@ import type {
 	IOpVaultPlugin,
 	Manifest,
 } from "./types";
-import { FolderSelector, ShareModal, DownloadModal } from "./components";
+import { FolderSelector, ShareModal, DownloadModal, ConfirmModal } from "./components";
 import { HistoryView, VIEW_TYPE_HISTORY } from "./views";
 import { joinChannel, leaveChannel } from "./networking";
 
@@ -34,6 +34,7 @@ const defaultSettings: PluginSettings = {
 	inboxPath: "",
 	syncGroups: [],
 	nickname: "",
+  devMode: false,
 };
 
 export function generateUUID(): string {
@@ -640,5 +641,48 @@ class vaultSettingsTab extends PluginSettingTab {
 				);
 			});
 		}
-	}
+
+    containerEl.createEl("hr");
+    new Setting(containerEl).setName("Development").setHeading();
+
+    new Setting(containerEl)
+      .setName("Development mode")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.devMode)
+        .onChange(async (value) => {
+          if (value) {
+          const response: boolean = await ConfirmModal.display(this.app, "Enable developer mode?", "Only enable developer if you know what you're doing. This creates areas for vulnerabilities.", true);
+            console.debug(response);
+          if (response) {
+            this.plugin.settings.devMode = value;
+            await this.plugin.saveSettings();
+            this.display();
+          } else {
+              toggle.setValue(false);
+            }
+          } else {
+            this.plugin.settings.devMode = value;
+            await this.plugin.saveSettings();
+            this.display();
+          }
+          new Notice("Please reload the app to apply changes.")
+        })
+      )
+
+    if (this.plugin.settings.devMode) {
+      new Setting(containerEl)
+        .setName("Certificate hash")
+        .addText((text) =>
+          text
+            .setPlaceholder("A certificate hash.")
+            .setValue(this.plugin.settings.certHash)
+            .onChange(async (value) => {
+              this.plugin.settings.certHash = value;
+              await this.plugin.saveSettings();
+              this.display();
+              new Notice("Please reload the app to apply changes.");
+            })
+        )
+    }
+  }
 }

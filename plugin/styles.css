@@ -98,3 +98,9 @@
     gap: 4px;
     padding: 5px 0 5px 5px;
 }
+
+.opv-modal-btns {
+  display: flex;
+  flex-direction: row;
+  gap: 7px;
+}

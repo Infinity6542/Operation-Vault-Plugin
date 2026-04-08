@@ -84,6 +84,8 @@ export interface PluginSettings {
 	inboxPath: string;
 	syncGroups: SyncGroup[];
 	nickname: string;
+  devMode: boolean;
+  certHash: string;
 }
 
 export interface UploadModal {

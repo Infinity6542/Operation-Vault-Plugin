@@ -555,7 +555,7 @@ class vaultSettingsTab extends PluginSettingTab {
 
 				new Setting(controlDiv).addButton((btn) =>
 					btn
-						.setButtonText("Revoke")
+						.setButtonText("Stop sharing")
 						.setWarning()
 						.onClick(async () => {
 							if (!this.plugin.activeTransport) {
@@ -610,7 +610,7 @@ class vaultSettingsTab extends PluginSettingTab {
 
 				new Setting(controlDiv).addButton((btn) =>
 					btn
-						.setButtonText("Revoke")
+						.setButtonText("Stop sharing")
 						.setWarning()
 						.onClick(async () => {
 							if (!this.plugin.activeTransport) {

@@ -4,18 +4,17 @@
 }
 
 .opv-remote-label {
-  position: absolute;
+  position: relative;
+  user-select: none;
+  pointer-events: auto;
   font-size: 0.8em;
   padding: 2px 4px;
   border-radius: 6px;
   border-bottom-left-radius: 0px;
-  translate: 0 0;
-  transform: translate(0, -100%);
   transition:
     transform 0.1s ease-out,
     border-radius 0.2s ease-out;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  width: max-content;
   white-space: nowrap;
   z-index: 2;
   will-change: transform;
@@ -37,11 +36,8 @@
   border-bottom-right-radius: 0px;
 }
 
-.opv-remote-label:hover {
-  translate: 0 0;
-  transform: translate(0, 100%);
-  border-top-left-radius: 0px;
-  border-bottom-left-radius: 6px;
+.opv-remote-label-hovered {
+  transform: translateY(200%);
 }
 
 .opv-remote-label.opv-align-right:hover {
@@ -52,7 +48,12 @@
 }
 
 .opv-remote-label-container {
-  padding: 5px;
+  position: absolute;
+  display: inline-grid;
+  grid-template-rows: repeat(3, 1fr);
+  transform: translate(0, -33.33%);
+  padding: 0;
+  pointer-events: none;
 }
 
 .opv-remote-caret {

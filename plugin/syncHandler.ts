@@ -51,6 +51,14 @@ import { getManifest } from "./handlers/state";
 const openDocs = new Map<string, Y.Doc>();
 const openAwareness = new Map<string, Awareness>();
 
+// Solution suggested by Claude, not sure if this'll properly fix it but
+// everything seems fine at the moment.
+declare module "obsidian" {
+  interface Editor {
+    cm: EditorView;
+  }
+}
+
 export class SyncHandler {
   app: App;
   plugin: IOpVaultPlugin;
@@ -919,11 +927,13 @@ class CursorWidget extends WidgetType {
   }
 
   toDOM() {
-    const span = document.createElement("span");
+    const container = document.createElement("span");
+    container.className = "opv-remote-label-container";
+    const span = container.appendChild(document.createElement("span"));
     span.className = "opv-remote-label";
     span.style.backgroundColor = this.colour;
     span.textContent = this.name;
-    return span;
+    return container;
   }
 
   eq(other: CursorWidget) {
@@ -964,8 +974,7 @@ export const cursorPlugin = (app: App) =>
 
       findAwareness(view: EditorView) {
         const leaf = app.workspace.getLeavesOfType("markdown").find(
-          // @ts-expect-error, not typed
-          (l) => ((l.view as MarkdownView).editor?.cm as EditorView) === view,
+          (l) => ((l.view as MarkdownView).editor?.cm) === view,
         );
 
         if (leaf) {
@@ -1049,26 +1058,43 @@ export const cursorPlugin = (app: App) =>
       }
 
       adjustLabels(view: EditorView) {
-        const labels = view.dom.querySelectorAll(".opv-remote-label");
+        const labels = view.dom.querySelectorAll(".opv-remote-label-container");
         if (labels.length === 0) return;
 
         const editorRect = view.dom.getBoundingClientRect();
         const threshold = Math.min(editorRect.width * 0.2, 100);
 
         labels.forEach((el) => {
-          const label = el as HTMLElement;
-          const rect = label.getBoundingClientRect();
-          const isFlipped = label.classList.contains("flipped");
+          const label = el.children[0] as HTMLElement;
+          // Implement better handling of cursor movements
+          el.addEventListener("pointerenter", () => {
+            label.classList.add("opv-remote-label-hovered");
+          });
+
+          el.addEventListener("pointerleave", () => {
+            label.classList.remove("opv-remote-label-hovered");
+          });
+
+          // document.addEventListener("mousemove", (e) => {
+          //   const rect = label.getBoundingClientRect();
+          //   const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+          //   label.classList.toggle("opv-remote-label-hovered", inside);
+          // });
+
+          // Calculate when to adjust horizontal position to avoid getting clipped
+          const container = el as HTMLElement;
+          const rect = container.getBoundingClientRect();
+          const isFlipped = container.classList.contains("flipped");
           const anchorX = isFlipped ? rect.right : rect.left;
           const distanceFromRight = editorRect.right - anchorX;
 
           if (distanceFromRight < threshold) {
             if (!isFlipped) {
-              label.classList.add("opv-align-right");
+              container.classList.add("opv-align-right");
             }
           } else {
             if (isFlipped) {
-              label.classList.remove("opv-align-right");
+              container.classList.remove("opv-align-right");
             }
           }
         });

@@ -268,7 +268,7 @@ function userList(plugin: IOpVaultPlugin, message: TransportPacket) {
       console.debug("[OPV] Current users in channel:", users);
       clearTimeout(noticeDebounce);
       noticeDebounce = setTimeout(() => {
-        new Notice(`Currently online: ${e.length}`);
+        // new Notice(`Currently online: ${e.length}`);
         noticeDebounce = undefined;
       }, 500);
     } else {

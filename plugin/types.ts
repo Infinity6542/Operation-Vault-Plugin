@@ -2,178 +2,178 @@ import { App, EventRef, TFile, TFolder, SearchResult } from "obsidian";
 import { SyncHandler } from "./syncHandler";
 
 declare module "obsidian" {
-	interface Workspace {
-		on(
-			name: "opv:snapshot-created",
-			callback: (shareId: string) => void,
-		): EventRef;
-		trigger(name: "opv:snapshot-created", shareId: string): void;
-	}
+  interface Workspace {
+    on(
+      name: "opv:snapshot-created",
+      callback: (shareId: string) => void,
+    ): EventRef;
+    trigger(name: "opv:snapshot-created", shareId: string): void;
+  }
 }
 
 export interface IOpVaultPlugin {
-	settings: PluginSettings;
-	app: App;
-	activeWriter: WritableStreamDefaultWriter<Uint8Array> | null;
-	activeTransport: WebTransport | null;
-	syncHandler: SyncHandler;
-	onlineUsers: Map<string, string>;
-	channelUsers: Map<string, Set<string>>;
-	activeDownloads: Map<string, string>;
-	heartbeatInterval: ReturnType<typeof setTimeout> | null;
-	manifests: Map<string, Manifest>;
-	updatePresence(count: number): void;
-	saveSettings(): Promise<void>;
-	registerEvent(event: EventRef): void;
-	tryConnect(): Promise<void>;
+  settings: PluginSettings;
+  app: App;
+  activeWriter: WritableStreamDefaultWriter<Uint8Array> | null;
+  activeTransport: WebTransport | null;
+  syncHandler: SyncHandler;
+  onlineUsers: Map<string, string>;
+  channelUsers: Map<string, Set<string>>;
+  activeDownloads: Map<string, string>;
+  heartbeatInterval: ReturnType<typeof setTimeout> | null;
+  manifests: Map<string, Manifest>;
+  updatePresence(count: number): void;
+  saveSettings(): Promise<void>;
+  registerEvent(event: EventRef): void;
+  tryConnect(): Promise<void>;
 }
 
 export interface InnerMessage {
-	type:
-		| "file_start"
-		| "file_chunk"
-		| "file_end"
-		| "download"
-		| "download_request"
-		| "diffs"
-		| "changes"
-		| "update"
-		| "sync_vector"
-		| "sync_snapshot"
-		| "sync_update"
-		| "group_get"
-		| "group_info"
-		| "awareness"
-		| "manifest_update"
-		| "user_list";
-	content?: string;
-	filename?: string;
-	fileId?: string;
-	chunkIndex?: number;
-	shareId?: string;
-	pin?: string;
-	path?: string;
-	syncPayload?: string;
-	awarenessPayload?: string;
+  type:
+  | "file_start"
+  | "file_chunk"
+  | "file_end"
+  | "download"
+  | "download_request"
+  | "diffs"
+  | "changes"
+  | "update"
+  | "sync_vector"
+  | "sync_snapshot"
+  | "sync_update"
+  | "group_get"
+  | "group_info"
+  | "awareness"
+  | "manifest_update"
+  | "user_list";
+  content?: string;
+  filename?: string;
+  fileId?: string;
+  chunkIndex?: number;
+  shareId?: string;
+  pin?: string;
+  path?: string;
+  syncPayload?: string;
+  awarenessPayload?: string;
 }
 
 export interface TransportPacket {
-	type: "join" | "message" | "user_list" | "heartbeat" | "leave";
-	channel_id: string;
-	sender_id: string;
-	nickname?: string;
-	payload: string;
+  type: "join" | "message" | "user_list" | "heartbeat" | "leave";
+  channel_id: string;
+  sender_id: string;
+  nickname?: string;
+  payload: string;
 }
 
 export interface SharedItem {
-	id: string;
-	path: string;
-	pin?: string;
-	key: string;
-	createdAt: number;
-	shares: number;
-	groups?: string[];
+  id: string;
+  path: string;
+  pin?: string;
+  key: string;
+  createdAt: number;
+  shares: number;
+  groups?: string[];
 }
 
 export interface PluginSettings {
-	serverUrl: string;
-	channelName: string;
-	encryptionKey: string;
-	senderId: string;
-	sharedItems: SharedItem[];
-	inboxPath: string;
-	syncGroups: SyncGroup[];
-	nickname: string;
+  serverUrl: string;
+  channelName: string;
+  encryptionKey: string;
+  senderId: string;
+  sharedItems: SharedItem[];
+  inboxPath: string;
+  syncGroups: SyncGroup[];
+  nickname: string;
   devMode: boolean;
   certHash: string;
 }
 
 export interface UploadModal {
-	file: TFile;
-	app: App;
-	plugin: IOpVaultPlugin;
+  file: TFile;
+  app: App;
+  plugin: IOpVaultPlugin;
 }
 
 export interface SyncMessage {
-	type: "diffs" | "changes" | "update";
-	path: string;
-	payload: string;
+  type: "diffs" | "changes" | "update";
+  path: string;
+  payload: string;
 }
 
 export interface ManifestItem {
-	path: string;
-	mtime: number;
-	size?: number;
-	hash?: string;
+  path: string;
+  mtime: number;
+  size?: number;
+  hash?: string;
 }
 
 export interface FolderMatch {
-	item: TFolder;
-	match: SearchResult;
+  item: TFolder;
+  match: SearchResult;
 }
 
 export interface FileMatch {
-	item: TFile;
-	match: SearchResult;
+  item: TFile;
+  match: SearchResult;
 }
 
 export interface SyncGroup {
-	id: string;
-	files: SharedItem[];
-	pin?: string;
+  id: string;
+  files: SharedItem[];
+  pin?: string;
 }
 
 export interface AwarenessUpdate {
-	added: number[];
-	updated: number[];
-	removed: number[];
+  added: number[];
+  updated: number[];
+  removed: number[];
 }
 
 export interface RemoteCursor {
-	line: number;
-	ch: number;
+  line: number;
+  ch: number;
 }
 
 export interface AwarenessState {
-	user?: {
-		name: string;
-		colour: string;
-	};
-	cursor?: RemoteCursor;
-	selection?: {
-		anchor: RemoteCursor;
-		head: RemoteCursor;
-	};
+  user?: {
+    name: string;
+    colour: string;
+  };
+  cursor?: RemoteCursor;
+  selection?: {
+    anchor: RemoteCursor;
+    head: RemoteCursor;
+  };
 }
 
 export interface CursorCache {
-	[clientID: number]: {
-		pos: number;
-		colour: string;
-		name: string;
-		selection?: { anchor: number; head: number };
-	};
+  [clientID: number]: {
+    pos: number;
+    colour: string;
+    name: string;
+    selection?: { anchor: number; head: number };
+  };
 }
 
 export interface Manifest {
-	version: number;
-	owner: string;
-	updatedAt: number;
-	updatedBy: string;
-	snapshots: Snapshot[];
+  version: number;
+  owner: string;
+  updatedAt: number;
+  updatedBy: string;
+  snapshots: Snapshot[];
 }
 
 export interface Snapshot {
-	iteration: number;
-	hash: string;
-	size: number;
-	senderId: string;
-	ctime: number;
+  iteration: number;
+  hash: string;
+  size: number;
+  senderId: string;
+  ctime: number;
 }
 
 // Experimental, to be implemented later during a refactor
 export interface opError {
-	code: number;
-	// Message is optional if the code is 0.
-	message?: string;
+  code: number;
+  // Message is optional if the code is 0.
+  message?: string;
 }

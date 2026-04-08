@@ -1,102 +1,102 @@
 .opv-resource-error-input {
-	border-color: var(--background-modifier-error) !important;
-	border-width: 2px !important;
+  border-color: var(--background-modifier-error) !important;
+  border-width: 2px !important;
 }
 
 .opv-remote-label {
-	position: absolute;
-	font-size: 0.8em;
-	padding: 2px 4px;
-	border-radius: 6px;
-	border-bottom-left-radius: 0px;
-	translate: 0 0;
-	transform: translate(0, -100%);
-	transition:
-		transform 0.1s ease-out,
-		border-radius 0.2s ease-out;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-	width: max-content;
-	white-space: nowrap;
-	z-index: 2;
-	will-change: transform;
-	contain: layout style;
+  position: absolute;
+  font-size: 0.8em;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border-bottom-left-radius: 0px;
+  translate: 0 0;
+  transform: translate(0, -100%);
+  transition:
+    transform 0.1s ease-out,
+    border-radius 0.2s ease-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  width: max-content;
+  white-space: nowrap;
+  z-index: 2;
+  will-change: transform;
+  contain: layout style;
 }
 
 .opv-remote-label::after {
-	content: "";
-	position: absolute;
-	width: 100%;
-	height: 3.5em;
-	transform: translate(-96.5%, -100%);
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 3.5em;
+  transform: translate(-96.5%, -100%);
 }
 
 .opv-remote-label.opv-align-right {
-	translate: -100% 0;
-	transform: translate(0, -100%);
-	border-bottom-left-radius: 6px;
-	border-bottom-right-radius: 0px;
+  translate: -100% 0;
+  transform: translate(0, -100%);
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 0px;
 }
 
 .opv-remote-label:hover {
-	translate: 0 0;
-	transform: translate(0, 100%);
-	border-top-left-radius: 0px;
-	border-bottom-left-radius: 6px;
+  translate: 0 0;
+  transform: translate(0, 100%);
+  border-top-left-radius: 0px;
+  border-bottom-left-radius: 6px;
 }
 
 .opv-remote-label.opv-align-right:hover {
-	translate: -100% 0;
-	transform: translate(0, 100%) !important;
-	border-bottom-left-radius: 6px;
-	border-bottom-right-radius: 0px;
+  translate: -100% 0;
+  transform: translate(0, 100%) !important;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 0px;
 }
 
 .opv-remote-label-container {
-	padding: 5px;
+  padding: 5px;
 }
 
 .opv-remote-caret {
-	pointer-events: none;
+  pointer-events: none;
 }
 
 .opv-remote-caret-inline {
-	box-sizing: border-box;
+  box-sizing: border-box;
 }
 
 .cm-widgetBuffer {
-	position: relative;
+  position: relative;
 }
 
 .opv-snapshot {
-    display: flex;
-	margin-bottom: 15px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	padding-bottom: 15px;
+  display: flex;
+  margin-bottom: 15px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 15px;
 }
 
 .opv-snapshot small {
-    color: var(--text-muted);
-    margin-top: auto;
+  color: var(--text-muted);
+  margin-top: auto;
 }
 
 [data-type="opv-history-view"] h3 {
-	border-bottom: 1px solid var(--background-modifier-border);
-    padding-bottom: 20px
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 20px
 }
 
 .opv-history-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    margin-left: auto;
-    padding: 5px 5px 5px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-left: auto;
+  padding: 5px 5px 5px 0;
 }
 
 .opv-history-text {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 5px 0 5px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 0 5px 5px;
 }
 
 .opv-modal-btns {

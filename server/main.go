@@ -381,7 +381,7 @@ func certHandler() (tls.Certificate, string) {
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{Organization: []string{"Operation Vault"}},
+		Subject:      pkix.Name{Organization: []string{"Opal"}},
 		NotBefore:    time.Now().Add(-24 * time.Hour),
 		NotAfter:     time.Now().Add(time.Hour * 24 * 10),
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,

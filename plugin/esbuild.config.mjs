@@ -46,11 +46,5 @@ if (prod) {
 	process.exit(0);
 } else {
 	await context.watch();
-	// If you set a specific path in 'outfile', use that directory.
-	// Otherwise, this assumes styles.css is in the root.
-	try {
-		fs.copyFileSync("styles.css", "styles.css");
-	} catch (e) {
-		process.exit(e);
-	}
+	console.log("Build watch started...");
 }

@@ -144,7 +144,9 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
 								shareObjects.length
 							})`,
 						);
-						await this.syncHandler.startSync(file);
+            if (this.activeWriter) {
+						  await this.syncHandler.startSync(file);
+            }
 					}
 				})();
 			}),

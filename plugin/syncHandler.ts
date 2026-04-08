@@ -1075,12 +1075,6 @@ export const cursorPlugin = (app: App) =>
             label.classList.remove("opv-remote-label-hovered");
           });
 
-          // document.addEventListener("mousemove", (e) => {
-          //   const rect = label.getBoundingClientRect();
-          //   const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
-          //   label.classList.toggle("opv-remote-label-hovered", inside);
-          // });
-
           // Calculate when to adjust horizontal position to avoid getting clipped
           const container = el as HTMLElement;
           const rect = container.getBoundingClientRect();

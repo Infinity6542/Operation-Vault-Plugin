@@ -371,7 +371,6 @@ func certHandler() (tls.Certificate, string) {
 	keyRaw := os.Getenv("KEY_DATA")
 
 	if certRaw != "" && keyRaw != "" {
-		// Helper to try decoding base64 first, then fallback to raw
 		decode := func(s string) []byte {
 			s = strings.TrimSpace(s)
 			if b, err := base64.StdEncoding.DecodeString(s); err == nil {

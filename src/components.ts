@@ -539,7 +539,7 @@ export class DownloadModal extends Modal {
 }
 
 export class ConfirmModal extends Modal {
-  private resolve: (value: boolean) => void;
+  private resolve!: (value: boolean) => void;
   private submitted: boolean = false;
 
   constructor(

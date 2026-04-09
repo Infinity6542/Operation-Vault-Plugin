@@ -5,7 +5,7 @@ import {
 	ManifestItem,
 	SyncMessage,
 	TransportPacket,
-} from "types";
+} from "../types";
 import { sendSecureMessage } from "../networking";
 import { receiveFile } from "../fileHandler";
 import { arrayBufferToBase64 } from "../crypto";

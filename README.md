@@ -26,4 +26,7 @@ Anyway, multiplayer functionality will have these features:
 - Simple web UI for non-Obsidian users
 	- Comes with KaTeX, Excalidraw, Canvas, etc. rendering support!
 
+### Hosting/CRM
+I hope to implement a CRM-like systenm in the future. Please see the README for the web client under "Web Reader" for more information.
+
 Want more features? Open a feature request as an issue and I’ll take a look into it!

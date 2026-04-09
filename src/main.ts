@@ -54,13 +54,13 @@ export function generateUUID(): string {
 // }
 
 export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
-  settings: PluginSettings;
+  settings!: PluginSettings;
   activeWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
   activeTransport: WebTransport | null = null;
   activeDownloads: Map<string, string> = new Map();
   heartbeatInterval: ReturnType<typeof setTimeout> | null = null;
-  syncHandler: SyncHandler;
-  statusBarItem: HTMLElement;
+  syncHandler!: SyncHandler;
+  statusBarItem!: HTMLElement;
   onlineUsers: Map<string, string> = new Map();
   channelUsers: Map<string, Set<string>> = new Map();
   manifests: Map<string, Manifest> = new Map();
@@ -265,6 +265,9 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
             (g) => g.id === group,
           );
           if (!syncGroup) continue;
+          if (syncGroup.files.some(f => f.path === file.path)) {
+            continue;
+          }
           let shareItem = {
             id: generateUUID(),
             path: file.path,

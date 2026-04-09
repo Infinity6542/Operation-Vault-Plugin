@@ -963,7 +963,7 @@ export const cursorPlugin = (app: App) =>
     class {
       decorations: DecorationSet;
       awareness: Awareness | undefined;
-      unsubscribe: () => void;
+      unsubscribe!: () => void;
       refresh: boolean;
 
       constructor(view: EditorView) {

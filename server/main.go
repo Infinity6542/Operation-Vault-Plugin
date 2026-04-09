@@ -366,8 +366,15 @@ func serveIndex(w http.ResponseWriter, fsys fs.FS) {
 // Handles server Certificates
 // Generates certs if existing ones can't be found
 func certHandler() (tls.Certificate, string) {
-	certFile := "cert.pem"
-	keyFile := "key.pem"
+	certFile := os.Getenv("CERT_PATH")
+	keyFile := os.Getenv("KEY_PATH")
+
+	if certFile == "" {
+		certFile = "cert.pem"
+	}
+	if keyFile == "" {
+		keyFile = "key.pem"
+	}
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err == nil {

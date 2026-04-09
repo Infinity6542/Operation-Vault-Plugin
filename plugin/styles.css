@@ -31,20 +31,20 @@
 
 .opv-remote-label.opv-align-right {
   translate: -100% 0;
-  transform: translate(0, -100%);
-  border-bottom-left-radius: 6px;
+  border-radius: 6px;
   border-bottom-right-radius: 0px;
 }
 
 .opv-remote-label-hovered {
   transform: translateY(200%);
+  border-radius: 6px;
+  border-top-left-radius: 0px;
 }
 
-.opv-remote-label.opv-align-right:hover {
+.opv-remote-label-hovered.opv-align-right {
   translate: -100% 0;
-  transform: translate(0, 100%) !important;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 0px;
+  border-radius: 6px;
+  border-top-right-radius: 0px;
 }
 
 .opv-remote-label-container {

@@ -1062,7 +1062,7 @@ export const cursorPlugin = (app: App) =>
         if (labels.length === 0) return;
 
         const editorRect = view.dom.getBoundingClientRect();
-        const threshold = Math.min(editorRect.width * 0.2, 100);
+        const threshold = Math.min(editorRect.width * 0.3, 100);
 
         labels.forEach((el) => {
           const label = el.children[0] as HTMLElement;
@@ -1078,17 +1078,17 @@ export const cursorPlugin = (app: App) =>
           // Calculate when to adjust horizontal position to avoid getting clipped
           const container = el as HTMLElement;
           const rect = container.getBoundingClientRect();
-          const isFlipped = container.classList.contains("flipped");
+          const isFlipped = container.classList.contains("opv-align-right");
           const anchorX = isFlipped ? rect.right : rect.left;
           const distanceFromRight = editorRect.right - anchorX;
 
           if (distanceFromRight < threshold) {
             if (!isFlipped) {
-              container.classList.add("opv-align-right");
+              label.classList.add("opv-align-right");
             }
           } else {
             if (isFlipped) {
-              container.classList.remove("opv-align-right");
+              label.classList.remove("opv-align-right");
             }
           }
         });

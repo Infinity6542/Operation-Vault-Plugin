@@ -35,6 +35,7 @@ const defaultSettings: PluginSettings = {
   syncGroups: [],
   nickname: "",
   devMode: false,
+  certHash: "",
 };
 
 export function generateUUID(): string {

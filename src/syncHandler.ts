@@ -412,7 +412,7 @@ export class SyncHandler {
     }
   }
 
-  async handleAwarenessUpdate(path: string, payload: string) {
+  handleAwarenessUpdate(path: string, payload: string) {
     const awareness = openAwareness.get(path);
     if (!awareness) {
       console.error(`[OPV] No awareness found for path: ${path}`);

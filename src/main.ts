@@ -117,14 +117,14 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
       );
     });
 
-    this.addRibbonIcon("link", "Share file", async () => {
+    this.addRibbonIcon("link", "Share file", () => {
       //* As part of the temporary UI overhaul, the user can now select the file(s)
       //* they want to share within the modal!
       const activeFile = this.app.workspace.getActiveFile();
       new ShareModal(this.app, this, activeFile).open();
     });
 
-    this.addRibbonIcon("download", "Download shared item", async () => {
+    this.addRibbonIcon("download", "Download shared item", () => {
       new DownloadModal(this.app, this).open();
     });
 
@@ -314,7 +314,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
       },
     });
 
-    this.registerObsidianProtocolHandler("opv", async (params) => {
+    this.registerObsidianProtocolHandler("opv", (params) => {
       console.debug("[OPV] Handling protocol action:", params);
       if (params.id) {
         new DownloadModal(this.app, this, params.id).open();
@@ -385,7 +385,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
             }
           }
         }
-        await startHeartbeats(
+        startHeartbeats(
           this,
           this.activeWriter,
           this.settings.channelName,
@@ -415,7 +415,6 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
     if (count > 0) {
       this.statusBarItem.setText(`🟢 Online: ${count}`);
     } else {
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       this.statusBarItem.setText(`🔴 Offline`);
     }
   }
@@ -455,7 +454,6 @@ class vaultSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Nickname")
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc("Your sender ID shown to other users.")
       .addText((text) =>
         text
@@ -468,14 +466,11 @@ class vaultSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setName("Server URL")
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc("The server address of the WebTransport server.")
       .addText((text) =>
         text
           // TODO: Change placeholder before release
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setPlaceholder("https://localhost:4433")
           .setValue(this.plugin.settings.serverUrl)
           .onChange(async (value) => {
@@ -489,7 +484,6 @@ class vaultSettingsTab extends PluginSettingTab {
       .setDesc("The default broadcast channel.")
       .addText((text) =>
         text
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setPlaceholder("vault-1")
           .setValue(this.plugin.settings.channelName)
           .onChange(async (value) => {
@@ -519,7 +513,7 @@ class vaultSettingsTab extends PluginSettingTab {
 
         text
           .setValue(this.plugin.settings.inboxPath)
-          .onChange(async (value) => {
+          .onChange((value) => {
             debounceUpdate(value);
           });
 
@@ -549,11 +543,9 @@ class vaultSettingsTab extends PluginSettingTab {
         new Setting(controlDiv).addButton((btn) =>
           btn
             .setIcon("link")
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
             .setTooltip("Copy share ID")
             .onClick(async () => {
               await navigator.clipboard.writeText(item.id);
-              // eslint-disable-next-line obsidianmd/ui/sentence-case
               new Notice("Share ID copied to clipboard.");
             }),
         );
@@ -604,11 +596,9 @@ class vaultSettingsTab extends PluginSettingTab {
         new Setting(controlDiv).addButton((btn) =>
           btn
             .setIcon("link")
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
             .setTooltip("Copy share ID")
             .onClick(async () => {
               await navigator.clipboard.writeText(item.id);
-              // eslint-disable-next-line obsidianmd/ui/sentence-case
               new Notice("Share ID copied to clipboard.");
             }),
         );

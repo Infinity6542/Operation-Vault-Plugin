@@ -30,10 +30,10 @@ export class HistoryView extends ItemView {
   }
 
   async onOpen() {
-    await this.updateView();
+    this.updateView();
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        void (async () => await this.updateView())();
+        void (async () => this.updateView())();
       }),
     );
 
@@ -45,14 +45,14 @@ export class HistoryView extends ItemView {
             (i) => i.path === file?.path,
           );
           if (currentItem && currentItem.id == shareId) {
-            await this.updateView();
+            this.updateView();
           }
         })();
       }),
     );
   }
 
-  async updateView() {
+  updateView() {
     const container = this.contentEl;
     container.empty();
     container.createEl("h3", { text: "Version history" });

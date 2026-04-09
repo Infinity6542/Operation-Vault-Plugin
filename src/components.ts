@@ -185,12 +185,9 @@ export class ShareModal extends Modal {
     }
 
     new Setting(contentEl)
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setName("PIN (optional)")
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc("Set up a PIN to protect access")
       .setTooltip(
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
         "Setting up a PIN will require it to access the shared item. Don't lose it! It won't be shown again.",
       )
       .addText((text) =>
@@ -445,7 +442,6 @@ export class DownloadModal extends Modal {
         .setDesc("Enter the group name provided to you.")
         .addText((text) =>
           text
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
             .setPlaceholder("share-group-1")
             .onChange((value) => {
               this.group = value;
@@ -453,13 +449,10 @@ export class DownloadModal extends Modal {
         );
     } else {
       new Setting(contentEl)
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
         .setName("Share ID")
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
         .setDesc("Enter the share ID provided to you.")
         .addText((text) =>
           text
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
             .setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
             .setValue(this.shareId ? this.shareId : "")
             .onChange((value) => {
@@ -470,7 +463,6 @@ export class DownloadModal extends Modal {
 
     new Setting(contentEl)
       .setName("PIN")
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       .setDesc("Enter the PIN if you were provided one.")
       .addText((text) =>
         text.setPlaceholder("1234").onChange((value) => {
@@ -518,7 +510,6 @@ export class DownloadModal extends Modal {
       console.debug(`[OPV] Requested group info for group: ${this.group}`);
     } else {
       if (!this.shareId) {
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
         new Notice("Please enter a valid share ID.");
         console.error("[OPV] No Share ID provided.");
         return;

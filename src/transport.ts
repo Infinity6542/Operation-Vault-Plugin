@@ -81,7 +81,7 @@ export async function connect(
   }
 }
 
-export async function startHeartbeats(
+export function startHeartbeats(
   plugin: IOpVaultPlugin,
   writer: WritableStreamDefaultWriter<Uint8Array>,
   channelID: string,

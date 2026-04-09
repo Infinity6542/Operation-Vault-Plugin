@@ -366,6 +366,21 @@ func serveIndex(w http.ResponseWriter, fsys fs.FS) {
 // Handles server Certificates
 // Generates certs if existing ones can't be found
 func certHandler() (tls.Certificate, string) {
+	certPEM := os.Getenv("CERT_DATA")
+	keyPEM := os.Getenv("KEY_DATA")
+
+	if certPEM != "" && keyPEM != "" {
+		cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+		if err == nil {
+			parsed, _ := x509.ParseCertificate(cert.Certificate[0])
+			sha256Sum := sha256.Sum256(parsed.Raw)
+			fingerprint := base64.StdEncoding.EncodeToString(sha256Sum[:])
+			logger.Info("Loaded certificates from environment variables (CERT_DATA/KEY_DATA).")
+			return cert, fingerprint
+		}
+		logger.Errorf("Failed to parse certificates from environment variables: %v", err)
+	}
+
 	certFile := os.Getenv("CERT_PATH")
 	keyFile := os.Getenv("KEY_PATH")
 
@@ -382,9 +397,12 @@ func certHandler() (tls.Certificate, string) {
 		parsed, _ := x509.ParseCertificate(cert.Certificate[0])
 		sha256Sum := sha256.Sum256(parsed.Raw)
 		fingerprint := base64.StdEncoding.EncodeToString(sha256Sum[:])
-		logger.Info("Loaded existing certificates.")
+		logger.Info("Loaded existing certificates from disk.")
 		return cert, fingerprint
 	}
+
+	// 3. Fallback to generating self-signed dev certs
+	logger.Warnf("Could not load certs from %s, generating dev certs...", certFile)
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),

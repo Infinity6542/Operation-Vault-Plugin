@@ -24,8 +24,4 @@ RUN mkdir -p /app/certs
 EXPOSE 8080/tcp
 EXPOSE 8080/udp
 
-ENV PORT=8080
-ENV CERT_PATH=/app/certs/cert.pem
-ENV KEY_PATH=/app/certs/key.pem
-
 CMD ["./opvault-server"]

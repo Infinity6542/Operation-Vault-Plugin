@@ -77,7 +77,7 @@ func main() {
 	defer rawLogger.Sync()
 	logger = rawLogger.Sugar()
 
-	addr := "127.0.0.1:8080"
+	addr := ":8080"
 
 	tlsCert, fingerprint := certHandler()
 
@@ -366,21 +366,30 @@ func serveIndex(w http.ResponseWriter, fsys fs.FS) {
 // Handles server Certificates
 // Generates certs if existing ones can't be found
 func certHandler() (tls.Certificate, string) {
-	certPEM := os.Getenv("CERT_DATA")
-	keyPEM := os.Getenv("KEY_DATA")
+	// 1. Try to load from environment variables (Option C for Dokploy/Production)
+	certRaw := os.Getenv("CERT_DATA")
+	keyRaw := os.Getenv("KEY_DATA")
 
-	if certPEM != "" && keyPEM != "" {
-		cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if certRaw != "" && keyRaw != "" {
+		// Helper to try decoding base64 first, then fallback to raw
+		decode := func(s string) []byte {
+			s = strings.TrimSpace(s)
+			if b, err := base64.StdEncoding.DecodeString(s); err == nil {
+				return b
+			}
+			return []byte(s)
+		}
+
+		cert, err := tls.X509KeyPair(decode(certRaw), decode(keyRaw))
 		if err == nil {
 			parsed, _ := x509.ParseCertificate(cert.Certificate[0])
 			sha256Sum := sha256.Sum256(parsed.Raw)
 			fingerprint := base64.StdEncoding.EncodeToString(sha256Sum[:])
-			logger.Info("Loaded certificates from environment variables (CERT_DATA/KEY_DATA).")
+			logger.Info("Successfully loaded and decoded certificates from environment variables.")
 			return cert, fingerprint
 		}
 		logger.Errorf("Failed to parse certificates from environment variables: %v", err)
 	}
-
 	certFile := os.Getenv("CERT_PATH")
 	keyFile := os.Getenv("KEY_PATH")
 

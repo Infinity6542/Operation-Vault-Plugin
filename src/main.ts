@@ -26,7 +26,7 @@ import { joinChannel, leaveChannel } from "./networking";
 export type { SharedItem };
 
 const defaultSettings: PluginSettings = {
-  serverUrl: "https://127.0.0.1:8080/ws",
+  serverUrl: "https://opal.jchen.au:8080/ws",
   channelName: "vault-1",
   encryptionKey: "default",
   senderId: "",

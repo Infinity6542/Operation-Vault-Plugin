@@ -143,7 +143,7 @@ export async function awareness(
 			);
 			return;
 		}
-		await plugin.syncHandler.handleAwarenessUpdate(
+		plugin.syncHandler.handleAwarenessUpdate(
 			sharedItem.path,
 			decrypted.awarenessPayload,
 		);

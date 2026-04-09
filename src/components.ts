@@ -442,7 +442,7 @@ export class DownloadModal extends Modal {
         .setDesc("Enter the group name provided to you.")
         .addText((text) =>
           text
-            .setPlaceholder("share-group-1")
+            .setPlaceholder("Share-group-1")
             .onChange((value) => {
               this.group = value;
             }),
@@ -453,7 +453,7 @@ export class DownloadModal extends Modal {
         .setDesc("Enter the share ID provided to you.")
         .addText((text) =>
           text
-            .setPlaceholder("xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
+            .setPlaceholder("Xxxxxxxx-xxxx-xxxxx-xxxx-xxxxxxxxxxxx")
             .setValue(this.shareId ? this.shareId : "")
             .onChange((value) => {
               this.shareId = value;

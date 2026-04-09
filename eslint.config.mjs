@@ -28,7 +28,7 @@ export default defineConfig([
         "warn",
         {
           brands: ["YourBrand"],
-          acronyms: ["OK"],
+          acronyms: ["OK", "ID", "URL", "PIN"],
           enforceCamelCaseLower: true,
         },
       ],

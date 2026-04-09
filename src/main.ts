@@ -415,7 +415,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
     if (count > 0) {
       this.statusBarItem.setText(`🟢 Online: ${count}`);
     } else {
-      this.statusBarItem.setText(`🔴 Offline`);
+      this.statusBarItem.setText(`Offline`);
     }
   }
 
@@ -467,11 +467,11 @@ class vaultSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Server URL")
-      .setDesc("The server address of the WebTransport server.")
+      .setDesc("The server address of the server.")
       .addText((text) =>
         text
           // TODO: Change placeholder before release
-          .setPlaceholder("https://localhost:4433")
+          .setPlaceholder("Https://localhost:4433")
           .setValue(this.plugin.settings.serverUrl)
           .onChange(async (value) => {
             this.plugin.settings.serverUrl = value;
@@ -484,7 +484,7 @@ class vaultSettingsTab extends PluginSettingTab {
       .setDesc("The default broadcast channel.")
       .addText((text) =>
         text
-          .setPlaceholder("vault-1")
+          .setPlaceholder("Vault-1")
           .setValue(this.plugin.settings.channelName)
           .onChange(async (value) => {
             this.plugin.settings.channelName = value;

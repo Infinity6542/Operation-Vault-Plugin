@@ -1,11 +1,2 @@
-terminalsetup.json
-server/server.key
-server/key.pem
-plugin/node_modules
-plugin/main.js
-.wakatime-project
-**/*.txt
-server/op-vault-server
-.vscode/*
-docs
-.*/**
+node_modules/
+main.js

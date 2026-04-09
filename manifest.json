@@ -1,7 +1,7 @@
 {
 	"id": "opal",
 	"name": "Operation Vault",
-	"version": "0.1.0",
+	"version": "0.1.4",
 	"minAppVersion": "1.11.0",
 	"description": "Bringing secure multiplayer collaboration functionality to Obsidian! Edit together with live cursors, selection highlights and (close to) realtime edits. Comments and web editor coming soon! CRM functionality also coming soon!",
 	"author": "Infinity6542",

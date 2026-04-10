@@ -470,8 +470,7 @@ class vaultSettingsTab extends PluginSettingTab {
       .setDesc("The server address of the server.")
       .addText((text) =>
         text
-          // TODO: Change placeholder before release
-          .setPlaceholder("Https://localhost:4433")
+          .setPlaceholder("Link with the port")
           .setValue(this.plugin.settings.serverUrl)
           .onChange(async (value) => {
             this.plugin.settings.serverUrl = value;

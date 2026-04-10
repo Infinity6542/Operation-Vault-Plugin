@@ -127,7 +127,7 @@ export async function sync(
 	return;
 }
 
-export async function awareness(
+export function awareness(
 	plugin: IOpVaultPlugin,
 	decrypted: InnerMessage,
 	message: TransportPacket,

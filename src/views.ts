@@ -29,17 +29,17 @@ export class HistoryView extends ItemView {
     return "history";
   }
 
-  async onOpen() {
+  onOpen(): Promise<void> {
     this.updateView();
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        void (async () => this.updateView())();
+        void (() => this.updateView())();
       }),
     );
 
     this.registerEvent(
       this.app.workspace.on("opv:snapshot-created", (shareId: string) => {
-        void (async () => {
+        void (() => {
           const file = this.app.workspace.getActiveFile();
           const currentItem = this.plugin.settings.sharedItems.find(
             (i) => i.path === file?.path,
@@ -50,6 +50,7 @@ export class HistoryView extends ItemView {
         })();
       }),
     );
+    return Promise.resolve();
   }
 
   updateView() {

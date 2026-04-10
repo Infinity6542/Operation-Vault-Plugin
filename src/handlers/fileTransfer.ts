@@ -163,7 +163,7 @@ export async function downloadRequest(
 
 	if (expectedPin !== incomingPin) {
 		console.error(
-			`[OPV] Invalid PIN for download request of share ID: ${decrypted.shareId}`,
+			`[OPV] Invalid pin for download request of share ID: ${decrypted.shareId}`,
 		);
 		return;
 	}

@@ -163,7 +163,7 @@ export class ShareModal extends Modal {
 
           text.setPlaceholder("/path/to/file.md")
             .setValue(value)
-            .onChange(async (value) => {
+            .onChange((value) => {
               debounceUpdate(value);
             });
 
@@ -185,10 +185,10 @@ export class ShareModal extends Modal {
     }
 
     new Setting(contentEl)
-      .setName("PIN (optional)")
-      .setDesc("Set up a PIN to protect access")
+      .setName("Passcode (optional)")
+      .setDesc("Set up a passcode to protect access")
       .setTooltip(
-        "Setting up a PIN will require it to access the shared item. Don't lose it! It won't be shown again.",
+        "Setting up a passcode will require it to access the shared item. Don't lose it! It won't be shown again.",
       )
       .addText((text) =>
         text.setPlaceholder("1234").onChange((value) => {
@@ -462,8 +462,8 @@ export class DownloadModal extends Modal {
     }
 
     new Setting(contentEl)
-      .setName("PIN")
-      .setDesc("Enter the PIN if you were provided one.")
+      .setName("Passcode")
+      .setDesc("Enter the passcode if you were provided one.")
       .addText((text) =>
         text.setPlaceholder("1234").onChange((value) => {
           this.pin = value;

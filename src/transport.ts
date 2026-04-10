@@ -343,7 +343,7 @@ async function handleIn(
     }
     // plugin, decrypted, message
     case "awareness": {
-      await awareness(plugin, decrypted, message);
+      awareness(plugin, decrypted, message);
       break;
     }
     case "manifest_update": {

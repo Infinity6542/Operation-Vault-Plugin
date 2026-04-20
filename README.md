@@ -7,6 +7,11 @@ The objective is to transform an Obsidian vault into something that has similar 
 ## Installation & Usage
 ### Installation
 Want to use OpVault? That's epic! You can follow these steps:
+> [!WARNING]
+> As of v0.1.7, the server is on port `7200`, NOT `8080`. As of v0.2, migration should be done automatically. If not, please complete manually.
+
+> [!WARNING]
+> If the plugin isn't working, consider reloading Obsidian and ensuring that the global channel names are the same.
 1. OpVault is not yet publicly listed (coming soon!). For now, you can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) and ensure it is installed and enabled.
 2. Enter the options/settings for BRAT and add a new beta plugin.
 3. Use `infinity6542/operation-vault-plugin` as the repository.

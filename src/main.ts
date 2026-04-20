@@ -26,7 +26,7 @@ import { joinChannel, leaveChannel } from "./networking";
 export type { SharedItem };
 
 const defaultSettings: PluginSettings = {
-  serverUrl: "https://opal.jchen.au:8080/ws",
+  serverUrl: "https://opal.jchen.au:7200/ws",
   channelName: "vault-1",
   encryptionKey: "default",
   senderId: "",
@@ -68,6 +68,13 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
   async onload() {
     console.debug("[OPV] Loading client...");
     await this.loadSettings();
+
+    // Migration to safer URL
+    if (this.settings.serverUrl && this.settings.serverUrl == "https://opal.jchen.au:8080/ws") {
+      this.settings.serverUrl = "https://opal.jchen.au:7200/ws";
+      await this.saveSettings();
+      new Notice("You were successfully migrated to the new server endpoint.");
+    }
 
     if (!this.settings.senderId) {
       this.settings.senderId = generateUUID();
@@ -481,14 +488,23 @@ class vaultSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Global channel name")
       .setDesc("The default broadcast channel.")
-      .addText((text) =>
+      .addText((text) => {
+        const prevValue = this.plugin.settings.channelName;
         text
           .setPlaceholder("Vault-1")
           .setValue(this.plugin.settings.channelName)
           .onChange(async (value) => {
-            this.plugin.settings.channelName = value;
+            const response: boolean = await ConfirmModal.display(this.app, "Change server endpoint?", "Are you sure you want to change the global channel? This WILL affect connectivity with other clients. ONLY DO THIS IF YOU KNOW WHAT YOU ARE DOING.", true);
+            if (response) {
+              this.plugin.settings.channelName = value;
+              await this.plugin.saveSettings();
+              this.display();
+            } else {
+              text.setValue(prevValue);
+            }
             await this.plugin.saveSettings();
-          }),
+          })
+      }
       );
 
     new Setting(containerEl)

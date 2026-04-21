@@ -240,6 +240,12 @@ export async function download(
     buffer.set(chunk, offset);
     offset += chunk.length;
   }
+
+  if (buffer.length === 0) {
+    console.warn(`[OPV] Downloaded empty resource: ${resource}`);
+    return undefined;
+  }
+
   return buffer;
 }
 

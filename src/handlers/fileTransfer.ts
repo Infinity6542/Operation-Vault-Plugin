@@ -198,6 +198,8 @@ export async function requestFile(
 	console.debug(`[OPV] Requesting file with share ID: ${shareId}`);
 	new Notice(`Requesting file...`);
 
+	plugin.activeDownloads.set(shareId, pin || "");
+
 	await joinChannel(
 		plugin.activeWriter,
 		shareId,

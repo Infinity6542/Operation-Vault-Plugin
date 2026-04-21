@@ -12,6 +12,7 @@ Want to use OpVault? That's epic! You can follow these steps:
 
 > [!CAUTION]
 > Please ensure that the server URL is `https://opal.jchen.au:7200/ws` (NOT `:8080`) and that the global channel is `vault-1` upon installation.
+> If it still doesn't work, please contact me **with screenshots of the dev console (ctrl+shift+i) with all options selected where it says "Default levels".
 
 1. OpVault is not yet publicly listed (coming soon!). For now, you can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) and ensure it is installed and enabled.
 2. Enter the options/settings for BRAT and add a new beta plugin.

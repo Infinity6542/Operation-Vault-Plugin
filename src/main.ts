@@ -100,30 +100,6 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
       }
     });
 
-    this.addRibbonIcon("paper-plane", "Send file", async () => {
-      if (!this.activeWriter) {
-        new Notice("Not connected to server.");
-        console.debug("[OPV] No active writer found.");
-        return;
-      }
-
-      const activeFile = this.app.workspace.getActiveFile();
-      if (!activeFile) {
-        new Notice("Open a file to send it!");
-        console.debug("[OPV] Active file is not a TFile.");
-        return;
-      }
-
-      await sendFileChunked(
-        this.activeWriter,
-        this.settings.channelName,
-        activeFile,
-        this.app,
-        this,
-        this.settings.encryptionKey,
-      );
-    });
-
     this.addRibbonIcon("link", "Share file", () => {
       //* As part of the temporary UI overhaul, the user can now select the file(s)
       //* they want to share within the modal!

@@ -7,16 +7,17 @@ The objective is to transform an Obsidian vault into something that has similar 
 ## Installation & Usage
 ### Installation
 Want to use OpVault? That's epic! You can follow these steps:
-> [!WARNING]
-> As of v0.1.7, the server is on port `7200`, NOT `8080`. As of v0.2, migration should be done automatically. If not, please complete manually.
+> [!IMPORTANT]
+> As of v0.1.7, the server is on port `7200`, NOT `8080`. As of v0.2, migration should be done automatically upon a reload. If not, please complete manually.
 
-> [!WARNING]
-> If the plugin isn't working, consider reloading Obsidian and ensuring that the global channel names are the same.
+> [!CAUTION]
+> Please ensure that the server URL is `https://opal.jchen.au:7200/ws` (NOT `:8080`) and that the global channel is `vault-1` upon installation.
+
 1. OpVault is not yet publicly listed (coming soon!). For now, you can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) and ensure it is installed and enabled.
 2. Enter the options/settings for BRAT and add a new beta plugin.
 3. Use `infinity6542/operation-vault-plugin` as the repository.
 4. Select "Latest version".
-5. Ensure "Enable after isntalling the plugin" is ticked and click on "Add plugin".
+5. Ensure "Enable after isntalling the plugin" is ticked and click on "Add plugin". **Please read the above two callouts to ensure that URL is correct.**
 6. You're done!
 > [!WARNING]
 > While mobile is technically supported, it's a bit iffy at the moment. I've tested it and it's extremely inconsistent and awareness features aren't syupported. Rest assured, I'll nail down mobile support by v1.0.

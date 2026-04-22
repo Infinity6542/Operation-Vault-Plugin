@@ -234,6 +234,11 @@ export async function download(
     }
   }
 
+  if (length === 0) {
+    console.error(`[OPV] Empty response when downloading ${resource} with ID ${shareId}`);
+    return;
+  }
+
   const buffer = new Uint8Array(length);
   let offset = 0;
   for (const chunk of chunks) {

@@ -1,7 +1,7 @@
 {
 	"id": "opal",
 	"name": "Operation Vault",
-	"version": "0.1.5",
+	"version": "0.2.2",
 	"minAppVersion": "1.11.0",
 	"description": "Bringing secure multiplayer collaboration functionality! Edit together with live cursors, selection highlights and (close to) realtime edits. Comments and web editor coming soon! CRM functionality coming later!",
 	"author": "Infinity6542",

@@ -11,7 +11,6 @@ import {
 } from "obsidian";
 import { connect, disconnect, startHeartbeats } from "./transport";
 import { remove } from "./comm";
-import { sendFileChunked } from "./fileHandler";
 import { SyncHandler, cursorPlugin } from "./syncHandler";
 import type {
   SharedItem,
@@ -31,7 +30,7 @@ const defaultSettings: PluginSettings = {
   encryptionKey: "default",
   senderId: "",
   sharedItems: [],
-  inboxPath: "",
+  inboxPath: "/",
   syncGroups: [],
   nickname: "",
   devMode: false,
@@ -300,7 +299,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
     this.registerObsidianProtocolHandler("opv", (params) => {
       console.debug("[OPV] Handling protocol action:", params);
       if (params.id) {
-        new DownloadModal(this.app, this, params.id).open();
+        new DownloadModal(this.app, this, params).open();
       }
     });
 

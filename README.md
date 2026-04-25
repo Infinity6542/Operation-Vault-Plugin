@@ -24,6 +24,8 @@ Want to use OpVault? That's epic! You can follow these steps:
 > While mobile is technically supported, it's a bit iffy at the moment. I've tested it and it's extremely inconsistent and awareness features aren't syupported. Rest assured, I'll nail down mobile support by v1.0.
 ### Usage
 **If you are on mobile (Android/iOS), please see the above warning.**
+> [!TIP]
+> OpVault works best with a fast and stable internet connection. While in pre-release, the plugin may not work well if you do not have one.
 Using Operation Vault is easy. Use these steps for sharing and downloading:
 #### Sharing (single file)
 1. Open the file that you want to share. This is optional, but it'll make the process easier.

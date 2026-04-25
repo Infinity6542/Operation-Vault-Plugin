@@ -303,8 +303,10 @@ async function handleIn(
     key = plugin.settings.encryptionKey;
   } else if (groupItem && groupItem.pin) {
     key = groupItem.pin;
+    console.debug("Group key:", key);
   } else if (sharedItem) {
     key = sharedItem.pin || sharedItem.key;
+    console.debug("Item key:", key);
   } else if (plugin.activeDownloads.has(message.channel_id)) {
     key = plugin.activeDownloads.get(message.channel_id) || "";
   } else {

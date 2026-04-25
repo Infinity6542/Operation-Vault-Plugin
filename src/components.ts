@@ -9,7 +9,7 @@ import {
   TFile,
   Setting,
   ButtonComponent,
-  // stringifyYaml,
+  ObsidianProtocolData,
 } from "obsidian";
 import {
   opError,
@@ -130,7 +130,7 @@ export class ShareModal extends Modal {
       .setDesc("Share a single file or multiple?")
       .addDropdown((e) => {
         e.addOption("file", "Single file")
-          .addOption("folder", "Sync group")
+          .addOption("group", "Sync group")
           .setValue(this.mode)
           .onChange((value) => {
             this.mode = value as "file" | "group";
@@ -214,15 +214,16 @@ export class ShareModal extends Modal {
           if (this.mode === "file") {
             id = await this.createShare();
           } else {
-            id = await this.createSyncGroup(this.item);
+            id = await this.createSyncGroup(this.item, this.pin);
           }
-          if (!(id && typeof id === "string"))
-            return new Notice("Failed to create share.");
-          const link = `obsidian://opv?action=join&id=${id}`;
+          if (!(id && typeof id === "string")) {
+            new Notice("Failed to create share.");
+            return;
+          }
+          let link = `obsidian://opv?action=join&id=${id}${this.mode === "group" ? "&group=true" : ""}`;
           await navigator.clipboard.writeText(link);
           new Notice(
-            `Shared ${id}. The ${this.mode === "file" ? "share ID" : "group ID"
-            } has been copied to your clipboard.`,
+            `Shared ${id}. The link has been copied to your clipboard.`,
           );
           this.close();
         });
@@ -238,10 +239,12 @@ export class ShareModal extends Modal {
           if (this.mode === "file") {
             id = await this.createShare();
           } else {
-            id = await this.createSyncGroup(this.item);
+            id = await this.createSyncGroup(this.item, this.pin);
           }
-          if (!(id && typeof id === "string"))
-            return new Notice("Failed to create share.");
+          if (!(id && typeof id === "string")) {
+            new Notice("Failed to create share.");
+            return;
+          }
           await navigator.clipboard.writeText(id);
           new Notice(
             `Shared ${id}. The ${this.mode === "file" ? "share ID" : "group ID"
@@ -259,7 +262,7 @@ export class ShareModal extends Modal {
       return;
     }
     if (this.mode === "group") {
-      await this.createSyncGroup(this.item);
+      await this.createSyncGroup(this.item, this.pin);
     } else {
       const file = this.app.vault.getAbstractFileByPath(this.item);
       if (!(file instanceof TFile)) {
@@ -286,18 +289,19 @@ export class ShareModal extends Modal {
         this.plugin.settings.senderId,
         this.plugin.settings.nickname,
       );
-      console.debug(`joined channel ${newShare.id} after sharing`);
+      console.debug(`[OPV] Joined channel ${newShare.id} after sharing`);
       await this.plugin.syncHandler.startSync(file);
       return newShare.id;
     }
   }
 
-  async createSyncGroup(id: string): Promise<void | string | opError> {
+  async createSyncGroup(id: string, pin: string): Promise<void | string | opError> {
     const allFiles = this.app.vault.getFiles();
     const matches: TFile[] = [];
     const group: SyncGroup = {
       id: id,
       files: [],
+      pin: pin,
     };
     // Check for server connection
     if (!this.plugin.activeWriter || !this.plugin.activeTransport)
@@ -322,7 +326,7 @@ export class ShareModal extends Modal {
         if (values.includes(id)) matches.push(file);
       } else {
         console.debug(
-          `Unhandled type for sync-group frontmatter in ${file.path
+          `[OPV] Unhandled type for sync-group frontmatter in ${file.path
           }: ${typeof groups}`,
         );
       }
@@ -346,6 +350,11 @@ export class ShareModal extends Modal {
           groups: [id],
         };
         this.plugin.settings.sharedItems.push(shareItem);
+        if (this.upload) {
+          console.debug("[OPV] Requesting to upload file.", shareItem);
+          await upload(file, this.plugin, shareItem.id, shareItem.key);
+        }
+        await this.plugin.syncHandler.startSync(file);
       } else {
         if (!shareItem.groups) shareItem.groups = [];
         shareItem.groups.push(id);
@@ -374,6 +383,11 @@ export class ShareModal extends Modal {
         message: `Only synced ${index} out of ${matches.length} files for group ${id}.`,
       };
     }
+    group.id = id;
+    if (!this.plugin.settings.syncGroups.find((g) => g.id === id)) {
+      this.plugin.settings.syncGroups.push(group);
+      await this.plugin.saveSettings();
+    }
     await joinChannel(
       this.plugin.activeWriter,
       id,
@@ -381,11 +395,6 @@ export class ShareModal extends Modal {
       this.plugin.settings.nickname,
     );
     console.debug(`[OPV] Joined channel ${id} after creating group`);
-    group.id = id;
-    if (!this.plugin.settings.syncGroups.find((g) => g.id === id)) {
-      this.plugin.settings.syncGroups.push(group);
-      await this.plugin.saveSettings();
-    }
     return id;
   }
 
@@ -396,7 +405,6 @@ export class ShareModal extends Modal {
 }
 export class DownloadModal extends Modal {
   plugin: OpVaultPlugin;
-  group?: string;
   shareId?: string;
   pin: string = "";
   mode: "file" | "group" = "file";
@@ -404,12 +412,15 @@ export class DownloadModal extends Modal {
   constructor(
     app: App,
     plugin: OpVaultPlugin,
-    defaultId?: string,
+    params?: ObsidianProtocolData,
     // defaultPin?: string,
   ) {
     super(app);
     this.plugin = plugin;
-    this.shareId = defaultId;
+    if (params) {
+      this.shareId = params.id;
+      this.mode = params.group === "true" ? "group" : "file";
+    }
   }
 
   onOpen() {
@@ -443,8 +454,9 @@ export class DownloadModal extends Modal {
         .addText((text) =>
           text
             .setPlaceholder("Share-group-1")
+            .setValue(this.shareId ? this.shareId : "")
             .onChange((value) => {
-              this.group = value;
+              this.shareId = value;
             }),
         );
     } else {
@@ -483,31 +495,31 @@ export class DownloadModal extends Modal {
 
   async startDownload() {
     if (this.mode === "group") {
-      if (!this.group || !this.plugin.activeWriter) {
+      if (!this.shareId || !this.plugin.activeWriter) {
         new Notice("Could not complete action. Check console for details.");
         console.error("[OPV] No group name provided or no active writer.");
         return;
       }
-      this.plugin.activeDownloads.set(this.group, this.pin);
+      this.plugin.activeDownloads.set(this.shareId, this.pin);
       const transportPacket: InnerMessage = {
         type: "group_get",
-        content: this.group,
+        content: this.shareId,
       };
       await joinChannel(
         this.plugin.activeWriter,
-        this.group,
+        this.shareId,
         this.plugin.settings.senderId,
         this.plugin.settings.nickname,
       );
       //TODO: Figure out how to handle collisions with the server (group names)
       await sendSecureMessage(
         this.plugin.activeWriter,
-        this.group,
+        this.shareId,
         this.plugin.settings.senderId,
         transportPacket,
         this.pin,
       );
-      console.debug(`[OPV] Requested group info for group: ${this.group}`);
+      console.debug(`[OPV] Requested group info for group: ${this.shareId}`);
     } else {
       if (!this.shareId) {
         new Notice("Please enter a valid share ID.");

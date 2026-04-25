@@ -156,7 +156,7 @@ export async function receiveFile(
   overwrite?: boolean,
 ): Promise<string | void> {
   try {
-    let finalName = filename;
+    let finalName = inboxPath + filename;
     const incomingBytes = conversion(content);
     const incomingBuffer = incomingBytes.buffer;
 

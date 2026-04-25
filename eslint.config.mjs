@@ -6,8 +6,6 @@ import globals from "globals";
 
 export default defineConfig([
   ...obsidianmd.configs.recommended,
-  // Or include English locale files (JSON and TS/JS modules)
-  // ...obsidianmd.configs.recommendedWithLocalesEn,
 
   {
     files: ["**/*.ts"],
@@ -24,6 +22,7 @@ export default defineConfig([
 
     // Optional project overrides
     rules: {
+      "@typescript-eslint/restrict-template-expressions": "off",
       "obsidianmd/ui/sentence-case": [
         "warn",
         {
@@ -34,4 +33,16 @@ export default defineConfig([
       ],
     },
   },
+
+  {
+    ignores: [
+      "node_modules",
+      "dist",
+      "esbuild.config.mjs",
+      "eslint.config.js",
+      "version-bump.mjs",
+      "versions.json",
+      "main.js",
+    ],
+  }
 ]);

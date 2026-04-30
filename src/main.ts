@@ -142,7 +142,7 @@ export default class OpVaultPlugin extends Plugin implements IOpVaultPlugin {
         const sharedItem = this.settings.sharedItems.filter(
           (item) => item.path === oldPath,
         );
-        if (!sharedItem) return;
+        if (sharedItem.length === 0) return;
         for (const item of sharedItem) {
           await this.syncHandler.handleRename(file, item);
           item.path = file.path;

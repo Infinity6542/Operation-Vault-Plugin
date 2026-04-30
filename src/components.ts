@@ -173,11 +173,11 @@ export class ShareModal extends Modal {
         });
     } else {
       new Setting(contentEl)
-        .setName("Group name")
-        .setDesc("Name for your group of files")
+        .setName("Group ID")
+        .setDesc("A unique identifier for your sync group. The identifier should be what you put as the 'sync-group' property in your file properties.")
         .setTooltip("Comma-separated value in frontmatter 'sync-group'.")
         .addText((text) =>
-          text.setValue(this.item).onChange(async (value) => {
+          text.setValue("").setPlaceholder("Sync-group-name").onChange(async (value) => {
             this.item = value;
             await this.plugin.saveSettings();
           }),
@@ -449,8 +449,8 @@ export class DownloadModal extends Modal {
 
     if (this.mode === "group") {
       new Setting(contentEl)
-        .setName("Group name")
-        .setDesc("Enter the group name provided to you.")
+        .setName("Group ID")
+        .setDesc("Enter the group ID provided to you.")
         .addText((text) =>
           text
             .setPlaceholder("Share-group-1")
@@ -497,7 +497,7 @@ export class DownloadModal extends Modal {
     if (this.mode === "group") {
       if (!this.shareId || !this.plugin.activeWriter) {
         new Notice("Could not complete action. Check console for details.");
-        console.error("[OPV] No group name provided or no active writer.");
+        console.error("[OPV] No group ID provided or no active writer.");
         return;
       }
       this.plugin.activeDownloads.set(this.shareId, this.pin);

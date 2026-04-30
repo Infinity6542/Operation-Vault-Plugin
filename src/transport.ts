@@ -128,7 +128,7 @@ export function startHeartbeats(
             );
           } catch (e) {
             new Notice("Connection lost. Disconnecting...");
-            console.debug(`[OPV] Connection lost during heartbeat: ${e}`);
+            console.debug(`[OPV] Connection lost during heartbeat: ${e as string}`);
             if (plugin.activeTransport) {
               plugin.activeTransport.close();
               plugin.activeTransport = null;
@@ -137,7 +137,7 @@ export function startHeartbeats(
               try {
                 await plugin.activeWriter.close();
               } catch (writerError) {
-                console.debug(`[OPV] Error closing writer: ${writerError}`);
+                console.debug(`[OPV] Error closing writer: ${writerError as string}`);
               }
               plugin.activeWriter = null;
             }
